@@ -1,0 +1,1 @@
+En esta carpeta van todos los repositories, usamos JPA
