@@ -36,32 +36,22 @@ const refreshOptions = [
     { value: '60', label: '1 minuto' }
 ];
 
-class InstanceUtils {
-    static badgeClasses = { online: 'badgeOk', readOnly: 'badgeWarn', offline: 'badgeErr' };
-    static ringClasses = { online: 'ringOk', readOnly: 'ringWarn', offline: 'ringErr' };
+const badgeClasses = { online: 'badgeOk', readOnly: 'badgeWarn', offline: 'badgeErr' };
+const ringClasses  = { online: 'ringOk',  readOnly: 'ringWarn',  offline: 'ringErr'  };
 
-    static badge(status, live = false) {
-        const tone = this.badgeClasses[status] ?? '';
-        const pulse = live && status === 'online' ? 'live' : '';
-        return `badge ${tone} ${pulse}`.trim();
-    }
+const badge = (status, live = false) =>
+    `badge 
+    ${badgeClasses[status] ?? ''} 
+    ${live && status === 'online' ? 'live' : ''}
+    `.trim();
 
-    static ring(status) {
-        return this.ringClasses[status] ?? '';
-    }
+const ring = (status) => ringClasses[status] ?? '';
 
-    static display(value, suffix = '') {
-        return value == null ? '—' : `${value}${suffix}`;
-    }
+const display = (value, suffix = '') => value == null ? '—' : `${value}${suffix}`;
 
-    static usage(value, percent) {
-        return value == null ? '—' : `${value} · ${percent ?? 0}%`;
-    }
+const usage = (value, percent) => value == null ? '—' : `${value} · ${percent ?? 0}%`;
 
-    static barStyle(percent) {
-        return { '--w': `${percent ?? 0}%` };
-    }
-}
+const barStyle = (percent) => ({ '--w': `${percent ?? 0}%` });
 
 function Instance() {
     const [overview, setOverview] = useState(emptyOverview);
@@ -78,7 +68,6 @@ function Instance() {
     const configDialogRef = useRef(null);
 
     const { instance, server, databases, memory, connection, sessions, lastCheck } = overview;
-    const { display, usage, barStyle } = InstanceUtils;
 
     async function loadOverview() {
         setOverview(emptyOverview);
@@ -148,7 +137,7 @@ function Instance() {
                         className="selector"
                         onClick={() => openDialog(instanceDialogRef)}
                     >
-                        <span className={InstanceUtils.badge(instance.status, true)}>
+                        <span className={badge(instance.status, true)}>
                             {display(instance.name)}
                         </span>
                         {display(server.name)} ▾
@@ -165,11 +154,11 @@ function Instance() {
 
             <div className="grid cols3">
                 <div className="card statusCard spanTwo">
-                    <div className={`statusRing ${InstanceUtils.ring(instance.status)}`}>
+                    <div className={`statusRing ${ring(instance.status)}`}>
                         <span className="statusDot">●</span>
                     </div>
                     <div>
-                        <span className={InstanceUtils.badge(instance.status, true)}>
+                        <span className={badge(instance.status, true)}>
                             {display(instance.statusLabel)}
                         </span>
                         <div className="instanceName">{display(instance.name)}</div>
@@ -198,36 +187,36 @@ function Instance() {
                     <div className="tableWrap">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Nombre</th>
-                                    <th>Descripción</th>
-                                    <th>Estado</th>
-                                    <th className="alignRight">Tamaño</th>
-                                </tr>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th className="alignRight">Tamaño</th>
+                            </tr>
                             </thead>
                             <tbody>
-                                {loading && (
-                                    <tr>
-                                        <td colSpan={4} className="emptyCell">Cargando...</td>
-                                    </tr>
-                                )}
-                                {!loading && databases.length === 0 && (
-                                    <tr>
-                                        <td colSpan={4} className="emptyCell">Sin datos</td>
-                                    </tr>
-                                )}
-                                {databases.map(db => (
-                                    <tr key={db.name}>
-                                        <td className="mono">{db.name}</td>
-                                        <td>{db.description}</td>
-                                        <td>
-                                            <span className={InstanceUtils.badge(db.status)}>
+                            {loading && (
+                                <tr>
+                                    <td colSpan={4} className="emptyCell">Cargando...</td>
+                                </tr>
+                            )}
+                            {!loading && databases.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="emptyCell">Sin datos</td>
+                                </tr>
+                            )}
+                            {databases.map(db => (
+                                <tr key={db.name}>
+                                    <td className="mono">{db.name}</td>
+                                    <td>{db.description}</td>
+                                    <td>
+                                            <span className={badge(db.status)}>
                                                 {db.statusLabel}
                                             </span>
-                                        </td>
-                                        <td className="alignRight mono">{db.size}</td>
-                                    </tr>
-                                ))}
+                                    </td>
+                                    <td className="alignRight mono">{db.size}</td>
+                                </tr>
+                            ))}
                             </tbody>
                         </table>
                     </div>
