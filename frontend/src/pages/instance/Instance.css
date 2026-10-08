@@ -550,3 +550,48 @@ input[type='radio'] {
     color: var(--ok);
     font-weight: 700;
 }
+
+.errorBox {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(242, 98, 92, 0.1);
+    border: 1px solid rgba(242, 98, 92, 0.35);
+    color: var(--err);
+    font-size: 13px;
+    margin-top: 14px;
+}
+
+.pageMessage {
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+.editBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.linkBtn {
+    all: unset;
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.linkBtn:hover {
+    text-decoration: underline;
+}
+
+.linkBtn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.field input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

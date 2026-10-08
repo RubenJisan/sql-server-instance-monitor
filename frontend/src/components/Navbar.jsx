@@ -5,17 +5,17 @@ import './Navbar.css';
 function Navbar() {
     return (
         <nav className="navbar">
-            {navItems.map(item => (
+            {navItems.map(({path, label, icon}) => (
                 <NavLink
-                    key={item.path}
-                    to={item.path}
+                    key={path}
+                    to={path}
                     className="navLink"
-                    aria-label={item.label}
+                    aria-label={label}
                 >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                        {item.icon}
+                        {icon}
                     </svg>
-                    <span className="navLabel">{item.label}</span>
+                    <span className="navLabel">{label}</span>
                 </NavLink>
             ))}
         </nav>

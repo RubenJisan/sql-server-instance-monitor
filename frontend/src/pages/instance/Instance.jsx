@@ -1,5 +1,5 @@
 import './Instance.css';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const API = 'http://localhost:8080/api';
 
@@ -10,19 +10,20 @@ const emptyOverview = {
     memory: { maxServer: null, inUse: null, inUsePercent: null, bufferAllocated: null, bufferInUse: null, bufferPercent: null },
     connection: { host: null, instance: null, user: null },
     sessions: { total: null, allowed: null },
-    lastCheck: { ago: null, refreshSeconds: null }
+    lastCheck: { collectedAt: null, refreshSeconds: null }
 };
 
 const emptyConfig = {
-    server: '',
-    instance: '',
+    id: null,
+    host: '',
+    instanceName: '',
     port: '',
     authentication: 'sqlServer',
-    user: '',
+    username: '',
     password: '',
-    refreshInterval: '10',
+    refreshSeconds: '10',
     encrypt: true,
-    trustCertificate: false
+    trustServerCertificate: false
 };
 
 const authOptions = [
@@ -36,69 +37,248 @@ const refreshOptions = [
     { value: '60', label: '1 minuto' }
 ];
 
-const badgeClasses = { online: 'badgeOk', readOnly: 'badgeWarn', offline: 'badgeErr' };
-const ringClasses  = { online: 'ringOk',  readOnly: 'ringWarn',  offline: 'ringErr'  };
+class ApiError extends Error {
+    constructor(message, status) {
+        super(message);
+        this.status = status;
+    }
+}
 
-const badge = (status, live = false) =>
-    `badge 
-    ${badgeClasses[status] ?? ''} 
-    ${live && status === 'online' ? 'live' : ''}
-    `.trim();
+class ApiClient {
+    static async request(path, { method = 'GET', body } = {}) {
+        let response;
+        try {
+            response = await fetch(`${API}${path}`, {
+                method,
+                headers: body ? { 'Content-Type': 'application/json' } : undefined,
+                body: body ? JSON.stringify(body) : undefined
+            });
+        } catch {
+            throw new ApiError('No se pudo contactar con el servidor backend.', 0);
+        }
 
-const ring = (status) => ringClasses[status] ?? '';
+        const text = await response.text();
+        let data = null;
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch {
+            data = null;
+        }
 
-const display = (value, suffix = '') => value == null ? '—' : `${value}${suffix}`;
+        if (!response.ok) {
+            throw new ApiError(data?.message ?? `Error ${response.status} del servidor.`, response.status);
+        }
+        return data;
+    }
+}
 
-const usage = (value, percent) => value == null ? '—' : `${value} · ${percent ?? 0}%`;
+class InstanceUtils {
+    static badgeClasses = { online: 'badgeOk', warning: 'badgeWarn', offline: 'badgeErr' };
+    static ringClasses = { online: 'ringOk', warning: 'ringWarn', offline: 'ringErr' };
 
-const barStyle = (percent) => ({ '--w': `${percent ?? 0}%` });
+    static badge(status, live = false) {
+        const tone = this.badgeClasses[status] ?? '';
+        const pulse = live && status === 'online' ? 'live' : '';
+        return `badge ${tone} ${pulse}`.trim();
+    }
+
+    static ring(status) {
+        return this.ringClasses[status] ?? '';
+    }
+
+    static display(value, suffix = '') {
+        return value == null ? '—' : `${value}${suffix}`;
+    }
+
+    static usage(value, percent) {
+        return value == null ? '—' : `${value} · ${percent ?? 0}%`;
+    }
+
+    static barStyle(percent) {
+        return { '--w': `${percent ?? 0}%` };
+    }
+
+    static formatAgo(collectedAt, now) {
+        if (!collectedAt) return null;
+        const seconds = Math.max(0, Math.floor((now - Date.parse(collectedAt)) / 1000));
+        if (seconds < 60) return `hace ${seconds} s`;
+        if (seconds < 3600) return `hace ${Math.floor(seconds / 60)} min`;
+        return `hace ${Math.floor(seconds / 3600)} h`;
+    }
+
+    static deriveName(config) {
+        const host = config.host.trim();
+        const instanceName = config.instanceName.trim();
+        return instanceName ? `${host}\\${instanceName}` : host;
+    }
+
+    static describeProfile(profile) {
+        const address = profile.port ? `${profile.host}:${profile.port}` : profile.host;
+        const authentication = authOptions.find(option => option.value === profile.authentication)?.label;
+        return [address, profile.instanceName, authentication, profile.username]
+            .filter(Boolean)
+            .join(' · ');
+    }
+
+    static toProfile(config) {
+        return {
+            id: config.id,
+            name: this.deriveName(config),
+            host: config.host.trim(),
+            instanceName: config.instanceName.trim(),
+            port: config.port.toString().trim() === '' ? null : Number(config.port),
+            authentication: config.authentication,
+            username: config.username.trim(),
+            password: config.password,
+            encrypt: config.encrypt,
+            trustServerCertificate: config.trustServerCertificate,
+            refreshSeconds: Number(config.refreshSeconds)
+        };
+    }
+
+    static fromProfile(profile) {
+        return {
+            id: profile.id,
+            host: profile.host,
+            instanceName: profile.instanceName ?? '',
+            port: profile.port == null ? '' : String(profile.port),
+            authentication: profile.authentication,
+            username: profile.username ?? '',
+            password: '',
+            refreshSeconds: String(profile.refreshSeconds),
+            encrypt: profile.encrypt,
+            trustServerCertificate: profile.trustServerCertificate
+        };
+    }
+}
+
+function TimeAgo({ since }) {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    return InstanceUtils.display(InstanceUtils.formatAgo(since, now));
+}
 
 function Instance() {
     const [overview, setOverview] = useState(emptyOverview);
-    const [instances, setInstances] = useState([]);
-    const [selectedInstance, setSelectedInstance] = useState('');
+    const [profiles, setProfiles] = useState([]);
+    const [activeId, setActiveId] = useState(null);
+    const [selectedId, setSelectedId] = useState(null);
     const [config, setConfig] = useState(emptyConfig);
 
     const [loading, setLoading] = useState(true);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState('');
+    const [pageMessage, setPageMessage] = useState(null);
+    const [dialogError, setDialogError] = useState('');
     const [toast, setToast] = useState('');
 
     const instanceDialogRef = useRef(null);
     const configDialogRef = useRef(null);
+    const inFlightRef = useRef(false);
 
     const { instance, server, databases, memory, connection, sessions, lastCheck } = overview;
+    const { display, usage, barStyle } = InstanceUtils;
+    const windowsAuthentication = config.authentication === 'windows';
 
-    async function loadOverview() {
-        setOverview(emptyOverview);
-        setLoading(false);
-    }
+    const loadOverview = useCallback(async () => {
+        inFlightRef.current = true;
+        try {
+            const data = await ApiClient.request('/instance/overview');
+            setOverview(data);
+            setPageMessage(null);
+        } catch (e) {
+            const noActiveConnection = e.status === 409;
+            if (noActiveConnection) setOverview(emptyOverview);
+            setPageMessage({ type: noActiveConnection ? 'warn' : 'error', text: e.message });
+        } finally {
+            inFlightRef.current = false;
+            setLoading(false);
+        }
+    }, []);
 
-    async function loadInstances() {
-        setInstances([]);
-    }
+    const loadProfiles = useCallback(async () => {
+        try {
+            const data = await ApiClient.request('/connections');
+            setProfiles(data.profiles);
+            setActiveId(data.activeId);
+        } catch (e) {
+            setPageMessage({ type: 'error', text: e.message });
+        }
+    }, []);
 
-    async function connectInstance() {
-        closeDialog(instanceDialogRef);
-        if (selectedInstance) setToast(`Conectado a ${selectedInstance}`);
+    async function connectProfile() {
+        if (!selectedId) return;
+        setDialogError('');
+        try {
+            const profile = await ApiClient.request(`/connections/${selectedId}/activate`, { method: 'POST' });
+            await Promise.all([loadOverview(), loadProfiles()]);
+            closeDialog(instanceDialogRef);
+            setToast(`Conectado a ${profile.name}`);
+        } catch (e) {
+            setDialogError(e.message);
+        }
     }
 
     async function testConnection() {
         setTesting(true);
         setTestResult('');
-        setTesting(false);
+        setDialogError('');
+        try {
+            const result = await ApiClient.request('/connections/test', {
+                method: 'POST',
+                body: InstanceUtils.toProfile(config)
+            });
+            setTestResult(`Conexión exitosa a ${result.serverName} · SQL Server ${result.version}`);
+        } catch (e) {
+            setDialogError(e.message);
+        } finally {
+            setTesting(false);
+        }
     }
 
     async function saveConfig() {
-        closeDialog(configDialogRef);
-        setToast('Configuración guardada');
+        setTestResult('');
+        setDialogError('');
+        try {
+            const saved = await ApiClient.request('/connections', {
+                method: 'POST',
+                body: InstanceUtils.toProfile(config)
+            });
+            setConfig(prev => ({ ...prev, id: saved.id }));
+
+            if (saved.id !== activeId) {
+                await ApiClient.request(`/connections/${saved.id}/activate`, { method: 'POST' });
+            }
+
+            await Promise.all([loadOverview(), loadProfiles()]);
+            closeDialog(configDialogRef);
+            setToast('Configuración guardada');
+        } catch (e) {
+            setDialogError(e.message);
+            await loadProfiles();
+        }
     }
 
     useEffect(() => {
         (async () => {
-            await Promise.all([loadOverview(), loadInstances()]);
+            await Promise.all([loadOverview(), loadProfiles()]);
         })();
-    }, []);
+    }, [loadOverview, loadProfiles]);
+
+    const refreshSeconds = lastCheck.refreshSeconds;
+
+    useEffect(() => {
+        if (!refreshSeconds) return;
+        const timer = setInterval(() => {
+            if (!document.hidden && !inFlightRef.current) loadOverview();
+        }, refreshSeconds * 1000);
+        return () => clearInterval(timer);
+    }, [refreshSeconds, loadOverview]);
 
     useEffect(() => {
         if (!toast) return;
@@ -118,6 +298,26 @@ function Instance() {
         if (e.target === e.currentTarget) e.currentTarget.close();
     }
 
+    function openInstanceDialog() {
+        setSelectedId(activeId);
+        setDialogError('');
+        openDialog(instanceDialogRef);
+    }
+
+    function openConfigDialog() {
+        const active = profiles.find(profile => profile.id === activeId);
+        setConfig(active ? InstanceUtils.fromProfile(active) : emptyConfig);
+        setTestResult('');
+        setDialogError('');
+        openDialog(configDialogRef);
+    }
+
+    function startNewConfig() {
+        setConfig(emptyConfig);
+        setTestResult('');
+        setDialogError('');
+    }
+
     function updateConfig(field, value) {
         setConfig(prev => ({ ...prev, [field]: value }));
     }
@@ -135,9 +335,9 @@ function Instance() {
                     <button
                         type="button"
                         className="selector"
-                        onClick={() => openDialog(instanceDialogRef)}
+                        onClick={openInstanceDialog}
                     >
-                        <span className={badge(instance.status, true)}>
+                        <span className={InstanceUtils.badge(instance.status, true)}>
                             {display(instance.name)}
                         </span>
                         {display(server.name)} ▾
@@ -145,20 +345,29 @@ function Instance() {
                     <button
                         type="button"
                         className="btn btnGhost"
-                        onClick={() => openDialog(configDialogRef)}
+                        onClick={openConfigDialog}
                     >
                         Configurar conexión
                     </button>
                 </div>
             </header>
 
+            {pageMessage && (
+                <div
+                    className={`${pageMessage.type === 'warn' ? 'warnBox' : 'errorBox'} pageMessage`}
+                    role="alert"
+                >
+                    {pageMessage.text}
+                </div>
+            )}
+
             <div className="grid cols3">
                 <div className="card statusCard spanTwo">
-                    <div className={`statusRing ${ring(instance.status)}`}>
+                    <div className={`statusRing ${InstanceUtils.ring(instance.status)}`}>
                         <span className="statusDot">●</span>
                     </div>
                     <div>
-                        <span className={badge(instance.status, true)}>
+                        <span className={InstanceUtils.badge(instance.status, true)}>
                             {display(instance.statusLabel)}
                         </span>
                         <div className="instanceName">{display(instance.name)}</div>
@@ -189,7 +398,7 @@ function Instance() {
                             <thead>
                             <tr>
                                 <th>Nombre</th>
-                                <th>Descripción</th>
+                                <th>Recuperación</th>
                                 <th>Estado</th>
                                 <th className="alignRight">Tamaño</th>
                             </tr>
@@ -208,9 +417,9 @@ function Instance() {
                             {databases.map(db => (
                                 <tr key={db.name}>
                                     <td className="mono">{db.name}</td>
-                                    <td>{db.description}</td>
+                                    <td>{db.recoveryModel}</td>
                                     <td>
-                                            <span className={badge(db.status)}>
+                                            <span className={InstanceUtils.badge(db.status)}>
                                                 {db.statusLabel}
                                             </span>
                                     </td>
@@ -275,7 +484,9 @@ function Instance() {
 
                 <div className="card kpi">
                     <div className="kpiLabel">Último chequeo</div>
-                    <div className="kpiValue">{display(lastCheck.ago)}</div>
+                    <div className="kpiValue">
+                        <TimeAgo since={lastCheck.collectedAt} />
+                    </div>
                     <div className="kpiDetail">
                         Refresco automático cada {display(lastCheck.refreshSeconds, ' s')}
                     </div>
@@ -291,7 +502,7 @@ function Instance() {
                 <div className="modalHead">
                     <div>
                         <h3 id="instanceDialogTitle">Seleccionar instancia</h3>
-                        <p>Servidores y instancias SQL Server detectados</p>
+                        <p>Conexiones guardadas en este equipo</p>
                     </div>
                     <button
                         type="button"
@@ -303,23 +514,26 @@ function Instance() {
                     </button>
                 </div>
                 <div className="modalBody">
-                    {instances.length === 0 && (
-                        <p className="sub">Sin instancias detectadas.</p>
+                    {profiles.length === 0 && (
+                        <p className="sub">
+                            Sin conexiones guardadas. Usa «Configurar conexión» para agregar una.
+                        </p>
                     )}
-                    {instances.map(item => (
+                    {profiles.map(item => (
                         <label key={item.id} className="option">
                             <input
                                 type="radio"
                                 name="instance"
-                                checked={selectedInstance === item.name}
-                                onChange={() => setSelectedInstance(item.name)}
+                                checked={selectedId === item.id}
+                                onChange={() => setSelectedId(item.id)}
                             />
                             <span>
-                                <b>{item.name}</b>
-                                <small>{item.details}</small>
+                                <b>{item.name}{item.id === activeId ? ' (activa)' : ''}</b>
+                                <small>{InstanceUtils.describeProfile(item)}</small>
                             </span>
                         </label>
                     ))}
+                    {dialogError && <div className="errorBox" role="alert">{dialogError}</div>}
                     <p className="sub">
                         El cambio de instancia no requiere modificar el código fuente.
                     </p>
@@ -332,7 +546,12 @@ function Instance() {
                     >
                         Cancelar
                     </button>
-                    <button type="button" className="btn" onClick={connectInstance}>
+                    <button
+                        type="button"
+                        className="btn"
+                        disabled={!selectedId}
+                        onClick={connectProfile}
+                    >
                         Conectar
                     </button>
                 </div>
@@ -359,23 +578,32 @@ function Instance() {
                     </button>
                 </div>
                 <div className="modalBody">
+                    {config.id && (
+                        <div className="editBar">
+                            <span className="sub">Editando un perfil guardado</span>
+                            <button type="button" className="linkBtn" onClick={startNewConfig}>
+                                + Nueva conexión
+                            </button>
+                        </div>
+                    )}
+
                     <div className="twoCols">
                         <div className="field">
-                            <label htmlFor="configServer">Servidor</label>
+                            <label htmlFor="configHost">Servidor</label>
                             <input
-                                id="configServer"
+                                id="configHost"
                                 type="text"
-                                value={config.server}
-                                onChange={e => updateConfig('server', e.target.value)}
+                                value={config.host}
+                                onChange={e => updateConfig('host', e.target.value)}
                             />
                         </div>
                         <div className="field">
-                            <label htmlFor="configInstance">Instancia</label>
+                            <label htmlFor="configInstanceName">Instancia</label>
                             <input
-                                id="configInstance"
+                                id="configInstanceName"
                                 type="text"
-                                value={config.instance}
-                                onChange={e => updateConfig('instance', e.target.value)}
+                                value={config.instanceName}
+                                onChange={e => updateConfig('instanceName', e.target.value)}
                             />
                         </div>
                     </div>
@@ -386,6 +614,7 @@ function Instance() {
                             <input
                                 id="configPort"
                                 type="text"
+                                inputMode="numeric"
                                 value={config.port}
                                 onChange={e => updateConfig('port', e.target.value)}
                             />
@@ -408,12 +637,13 @@ function Instance() {
 
                     <div className="twoCols">
                         <div className="field">
-                            <label htmlFor="configUser">Usuario</label>
+                            <label htmlFor="configUsername">Usuario</label>
                             <input
-                                id="configUser"
+                                id="configUsername"
                                 type="text"
-                                value={config.user}
-                                onChange={e => updateConfig('user', e.target.value)}
+                                disabled={windowsAuthentication}
+                                value={config.username}
+                                onChange={e => updateConfig('username', e.target.value)}
                             />
                         </div>
                         <div className="field">
@@ -421,6 +651,8 @@ function Instance() {
                             <input
                                 id="configPassword"
                                 type="password"
+                                disabled={windowsAuthentication}
+                                placeholder={config.id ? 'Sin cambios' : ''}
                                 value={config.password}
                                 onChange={e => updateConfig('password', e.target.value)}
                             />
@@ -431,8 +663,8 @@ function Instance() {
                         <label htmlFor="configRefresh">Intervalo de refresco</label>
                         <select
                             id="configRefresh"
-                            value={config.refreshInterval}
-                            onChange={e => updateConfig('refreshInterval', e.target.value)}
+                            value={config.refreshSeconds}
+                            onChange={e => updateConfig('refreshSeconds', e.target.value)}
                         >
                             {refreshOptions.map(option => (
                                 <option key={option.value} value={option.value}>
@@ -453,18 +685,15 @@ function Instance() {
                     <label className="check">
                         <input
                             type="checkbox"
-                            checked={config.trustCertificate}
-                            onChange={e => updateConfig('trustCertificate', e.target.checked)}
+                            checked={config.trustServerCertificate}
+                            onChange={e => updateConfig('trustServerCertificate', e.target.checked)}
                         />
                         Confiar en el certificado del servidor
                     </label>
 
                     {testResult && <div className="testResult">✓ {testResult}</div>}
+                    {dialogError && <div className="errorBox" role="alert">{dialogError}</div>}
 
-                    <div className="warnBox">
-                        Las credenciales se leen desde variables de entorno o un archivo de
-                        configuración fuera del repositorio.
-                    </div>
                 </div>
                 <div className="modalFoot">
                     <button
