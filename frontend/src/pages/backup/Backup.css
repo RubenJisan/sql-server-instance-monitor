@@ -1,0 +1,415 @@
+.backupPage {
+    /* ---------- Encabezado ---------- */
+    & .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+    & .sub {
+        margin-top: 4px;
+        color: var(--muted);
+    }
+    & .controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    & .selector {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface1);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    & .selector:hover {
+        background: var(--surface2);
+        border-color: var(--primary);
+    }
+
+    /* ---------- Botones ---------- */
+    & .btn {
+        padding: 9px 16px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: var(--primary);
+        color: #04121c;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: filter 0.15s;
+    }
+    & .btn:hover:not(:disabled) {
+        filter: brightness(1.1);
+    }
+    & .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    & .btnGhost {
+        background: transparent;
+        border-color: var(--line);
+        color: var(--text);
+    }
+    & .btnGhost:hover:not(:disabled) {
+        background: var(--surface2);
+        filter: none;
+    }
+
+    /* ---------- Badges ---------- */
+    & .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.6;
+        color: var(--muted);
+        background: color-mix(in srgb, var(--muted) 15%, transparent);
+    }
+    & .badgeOk {
+        color: var(--ok);
+        background: color-mix(in srgb, var(--ok) 15%, transparent);
+    }
+    & .badgeWarn {
+        color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 15%, transparent);
+    }
+    & .badgeErr {
+        color: var(--err);
+        background: color-mix(in srgb, var(--err) 15%, transparent);
+    }
+    & .badge.live::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: backupPulse 1.8s ease-in-out infinite;
+    }
+
+    /* ---------- Colores de texto ---------- */
+    & .textOk { color: var(--ok); }
+    & .textWarn { color: var(--warn); }
+    & .textErr { color: var(--err); }
+    & .mono { font-family: var(--fontMono); font-size: 13px; }
+    & .alignRight { text-align: right; }
+
+    /* ---------- Avisos ---------- */
+    & .pageMessage {
+        margin-bottom: 18px;
+    }
+    & .warnBox,
+    & .errorBox {
+        padding: 12px 14px;
+        border-left: 4px solid;
+        border-radius: 10px;
+        font-size: 13px;
+    }
+    & .warnBox {
+        color: var(--warn);
+        border-color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 12%, transparent);
+    }
+    & .errorBox {
+        color: var(--err);
+        border-color: var(--err);
+        background: color-mix(in srgb, var(--err) 12%, transparent);
+    }
+
+    /* ---------- Banner de interpretación ---------- */
+    & .riskBanner {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        margin-bottom: 18px;
+        padding: 14px 18px;
+        border: 1px solid;
+        border-radius: 14px;
+    }
+    & .riskBanner strong,
+    & .riskBanner span:not(.riskIcon) {
+        display: block;
+    }
+    & .riskBanner span:not(.riskIcon) {
+        color: var(--text);
+        opacity: 0.85;
+    }
+    & .riskIcon {
+        font-size: 22px;
+        line-height: 1.2;
+    }
+    & .riskOk {
+        color: var(--ok);
+        border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+        background: color-mix(in srgb, var(--ok) 10%, transparent);
+    }
+    & .riskWarn {
+        color: var(--warn);
+        border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+    }
+    & .riskErr {
+        color: var(--err);
+        border-color: color-mix(in srgb, var(--err) 40%, transparent);
+        background: color-mix(in srgb, var(--err) 10%, transparent);
+    }
+
+    /* ---------- Grid y tarjetas ---------- */
+    & .grid {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+    & .cols4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    & .split {
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+    & .card {
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--surface1) 88%, transparent);
+        backdrop-filter: blur(8px);
+    }
+    & .card h2 {
+        margin-bottom: 14px;
+        font-size: 15px;
+        font-weight: 700;
+    }
+    & .card h2 small {
+        margin-left: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--muted);
+    }
+
+    /* ---------- KPIs ---------- */
+    & .kpiLabel {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+    }
+    & .kpiValue {
+        margin: 6px 0 2px;
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    & .kpiDetail {
+        font-size: 13px;
+        color: var(--muted);
+    }
+
+    /* ---------- Tablas ---------- */
+    & .tableWrap {
+        overflow-x: auto;
+    }
+    & table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    & th {
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+    }
+    & th.alignRight {
+        text-align: right;
+    }
+    & td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+    }
+    & tbody tr:last-child td {
+        border-bottom: none;
+    }
+    & tbody tr:hover {
+        background: color-mix(in srgb, var(--surface2) 60%, transparent);
+    }
+    & .emptyCell {
+        padding: 24px 12px;
+        text-align: center;
+        color: var(--muted);
+    }
+
+    /* ---------- Últimos 14 días ---------- */
+    & .daysStrip {
+        display: grid;
+        grid-template-columns: repeat(14, minmax(0, 1fr));
+        gap: 4px;
+    }
+    & .day {
+        display: block;
+        height: 38px;
+        border-radius: 5px;
+        background: var(--line);
+    }
+    & .dayOk { background: var(--ok); opacity: 0.85; }
+    & .dayWarn { background: var(--warn); }
+    & .dayErr { background: var(--err); }
+
+    & .legend {
+        margin-top: 16px;
+    }
+    & .legendRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+    }
+    & .legendRow:last-child {
+        border-bottom: none;
+    }
+    & .policyInfo {
+        margin-top: 16px;
+    }
+    & .policyInfo + .warnBox {
+        margin-top: 16px;
+    }
+
+    /* ---------- Diálogos ---------- */
+    & .modal {
+        width: min(520px, 92vw);
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface1);
+        color: var(--text);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    }
+    & .modal::backdrop {
+        background: rgba(5, 8, 13, 0.7);
+        backdrop-filter: blur(2px);
+    }
+    & .modal[open] {
+        animation: backupModalIn 0.15s ease-out;
+    }
+    & .modalHead {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid var(--line);
+    }
+    & .modalHead h3 {
+        font-size: 17px;
+        font-weight: 700;
+    }
+    & .modalHead p {
+        margin-top: 2px;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    & .closeBtn {
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+    }
+    & .closeBtn:hover {
+        background: var(--surface2);
+        color: var(--text);
+    }
+    & .modalBody {
+        max-height: 60vh;
+        padding: 20px 24px;
+        overflow-y: auto;
+    }
+    & .modalFoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 24px;
+        border-top: 1px solid var(--line);
+    }
+    & .modalBody .errorBox {
+        margin-top: 12px;
+    }
+
+    /* Opciones (radio) del selector de instancia */
+    & .option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        cursor: pointer;
+    }
+    & .option:hover {
+        background: var(--surface2);
+    }
+    & .option:has(input:checked) {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 12%, transparent);
+    }
+    & .option b {
+        display: block;
+    }
+    & .option small {
+        color: var(--muted);
+    }
+
+    /* ---------- Toast ---------- */
+    & .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 100;
+        max-width: min(380px, calc(100vw - 48px));
+        padding: 12px 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface2);
+        color: var(--text);
+        font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        animation: backupModalIn 0.2s ease-out;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1100px) {
+        & .cols4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        & .split { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 560px) {
+        & .cols4 { grid-template-columns: minmax(0, 1fr); }
+    }
+}
+
+@keyframes backupPulse {
+    50% { opacity: 0.35; }
+}
+
+@keyframes backupModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}

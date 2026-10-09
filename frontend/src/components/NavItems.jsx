@@ -1,5 +1,6 @@
 import Instance from '@/pages/instance/Instance';
 import Audit from "@/pages/audit/Audit.jsx";
+import Backup from "@/pages/backup/Backup.jsx";
 
 const navItems = [
     {
@@ -34,7 +35,7 @@ const navItems = [
     {
         path: '/backup',
         label: 'Respaldo y recuperación',
-        element: <h1>Respaldo y recuperación</h1>,
+        element: <Backup />,
         icon: <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2" />
     },
     {

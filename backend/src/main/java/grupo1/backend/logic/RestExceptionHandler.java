@@ -1,6 +1,7 @@
 package grupo1.backend.logic;
 
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.core.NestedExceptionUtils;
@@ -55,5 +56,11 @@ public class RestExceptionHandler {
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(new ApiError(message));
+    }
+
+    @ExceptionHandler(BackupFailedException.class)
+    public ResponseEntity<Map<String, String>> backupFailed(BackupFailedException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(Map.of("message", e.getMessage()));
     }
 }
