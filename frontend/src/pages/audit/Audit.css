@@ -1,9 +1,4 @@
-/* ============================================================
-   Audit.css · Módulo 5 (Auditoría)
-   Reutiliza variables globales definidas en el tema (App.css).
-   ============================================================ */
 
-/* ---------- Header ---------- */
 .head {
     display: flex;
     justify-content: space-between;
@@ -73,7 +68,7 @@
     outline-offset: 2px;
 }
 
-/* ---------- Grid ---------- */
+
 .grid {
     display: grid;
     gap: 16px;
@@ -96,7 +91,6 @@
     }
 }
 
-/* ---------- Card ---------- */
 .card {
     background: linear-gradient(180deg, rgba(26, 34, 48, 0.72), rgba(19, 25, 34, 0.72));
     border: 1px solid var(--line);
@@ -122,7 +116,6 @@
     font-size: 12px;
 }
 
-/* ---------- KPI ---------- */
 .kpiLabel {
     color: var(--muted);
     font-size: 12.5px;
@@ -144,7 +137,6 @@
 .textErr  { color: var(--err);  }
 .textOk   { color: var(--ok);   }
 
-/* ---------- Tabs ---------- */
 .tabs {
     display: inline-flex;
     gap: 4px;
@@ -182,7 +174,6 @@
     outline-offset: 2px;
 }
 
-/* ---------- Tabla ---------- */
 .tableWrap {
     overflow-x: auto;
 }
@@ -229,7 +220,6 @@ tbody tr:hover {
     font-size: 12.5px;
 }
 
-/* ---------- Avatar (celda de usuario) ---------- */
 .userCell {
     display: inline-flex;
     align-items: center;
@@ -248,7 +238,6 @@ tbody tr:hover {
     flex: none;
 }
 
-/* ---------- Badges ---------- */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -292,7 +281,6 @@ tbody tr:hover {
     50% { opacity: 0.25; }
 }
 
-/* ---------- Mensajes ---------- */
 .warnBox {
     padding: 12px 14px;
     border-radius: 12px;
@@ -318,7 +306,6 @@ tbody tr:hover {
     margin-bottom: 16px;
 }
 
-/* ---------- Modal (diálogo de instancia) ---------- */
 .modal {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
@@ -423,7 +410,6 @@ input[type='radio'] {
     accent-color: var(--primary);
 }
 
-/* ---------- Toast ---------- */
 .toast {
     position: fixed;
     bottom: 28px;
@@ -444,4 +430,46 @@ input[type='radio'] {
     content: '✓ ';
     color: var(--ok);
     font-weight: 700;
+}
+/* ---------- Filtros y búsqueda ---------- */
+.filters {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.searchInput {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    min-width: 260px;
+}
+
+.searchInput:focus {
+    outline: 0;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.check {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--text);
+}
+
+input[type='checkbox'] {
+    accent-color: var(--primary);
+    width: 15px;
+    height: 15px;
+}
+
+.wrapCell {
+    max-width: 380px;
+    white-space: normal;
 }
