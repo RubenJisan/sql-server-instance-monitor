@@ -1,6 +1,7 @@
 import Instance from '@/pages/instance/Instance';
 import Audit from "@/pages/audit/Audit.jsx";
 import Backup from "@/pages/backup/Backup.jsx";
+import Storage from "@/pages/storage/Storage.jsx";
 
 const navItems = [
     {
@@ -24,7 +25,7 @@ const navItems = [
     {
         path: '/storage',
         label: 'Almacenamiento',
-        element: <h1>Almacenamiento</h1>,
+        element: <Storage />,
         icon: (
             <>
                 <ellipse cx="12" cy="5" rx="9" ry="3" />
