@@ -2,6 +2,7 @@ import Instance from '@/pages/instance/Instance';
 import Audit from "@/pages/audit/Audit.jsx";
 import Backup from "@/pages/backup/Backup.jsx";
 import Storage from "@/pages/storage/Storage.jsx";
+import Performance from "@/pages/performance/Performance.jsx";
 
 const navItems = [
     {
@@ -19,7 +20,7 @@ const navItems = [
     {
         path: '/performance',
         label: 'Rendimiento',
-        element: <h1>Rendimiento</h1>,
+        element: <Performance />,
         icon: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
     },
     {
