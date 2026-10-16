@@ -47,7 +47,6 @@ public class BackupService {
     private static final long STALE_SUCCESS_HOURS = 48;
 
     private static final List<String> TYPE_ORDER = List.of("D", "I", "L");
-    private static final Set<String> SYSTEM_DATABASES = Set.of("master", "model", "msdb", "tempdb");
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
@@ -62,13 +61,15 @@ public class BackupService {
     public BackupDTO overview(String database) {
         activeConnection.profile().orElseThrow(NoActiveConnectionException::new);
         String scope = BackupUtils.normalizeDatabase(database);
+        List<String> warnings = new ArrayList<>();
 
         LocalDateTime now = backupRepository.findServerNow();
         List<BackupRepository.BackupRow> recent = backupRepository.findRecentBackups(scope, HISTORY_LIMIT);
         Optional<BackupRepository.BackupRow> lastSuccess = backupRepository.findLastSuccess(scope, false);
         Optional<BackupRepository.BackupRow> lastFull = backupRepository.findLastSuccess(scope, true);
         List<BackupRepository.DailyRow> daily = backupRepository.findDailySummary(scope, DAYS_WINDOW);
-        List<Failure> failures = resolveFailures(scope, now);
+        List<Failure> failures = resolveFailures(scope, now, warnings);
+        List<String> withoutFull = backupRepository.findDatabasesWithoutFull(scope);
 
         List<BackupDTO.HistoryItem> history = Stream.concat(
                         recent.stream().map(BackupService::toHistoryItem),
@@ -88,14 +89,23 @@ public class BackupService {
                 metrics,
                 history,
                 toDays(now, daily, failures),
-                toAssessment(now, lastSuccess, lastFull, failures, daily),
-                toPolicy(scope, now)
+                toAssessment(now, lastSuccess, lastFull, failures, daily, withoutFull),
+                toPolicy(scope, now),
+                new BackupDTO.Scan(backupRepository.findBackupableDatabases(scope), warnings)
         );
     }
 
-    private List<Failure> resolveFailures(String scope, LocalDateTime now) {
+    private List<Failure> resolveFailures(String scope, LocalDateTime now, List<String> warnings) {
+        List<BackupRepository.FailureRow> rows;
+        try {
+            rows = backupRepository.findBackupFailures();
+        } catch (DataAccessException e) {
+            warnings.add("No se pudo leer el log de errores de SQL Server; los respaldos fallidos no se informan: %s"
+                    .formatted(NestedExceptionUtils.getMostSpecificCause(e).getMessage()));
+            return List.of();
+        }
         LocalDateTime since = now.minusDays(FAILURE_LOOKBACK_DAYS);
-        return backupRepository.findBackupFailures().stream()
+        return rows.stream()
                 .filter(row -> row.at() != null && row.at().isAfter(since))
                 .map(row -> BackupUtils.parseFailure(row.text())
                         .map(parsed -> new Failure(row.at(), parsed.database(), parsed.type())))
@@ -106,7 +116,7 @@ public class BackupService {
 
     private static boolean inScope(Failure failure, String scope) {
         return scope == null
-                ? !SYSTEM_DATABASES.contains(failure.database().toLowerCase())
+                ? !"tempdb".equalsIgnoreCase(failure.database())
                 : scope.equalsIgnoreCase(failure.database());
     }
 
@@ -163,15 +173,18 @@ public class BackupService {
                                                      Optional<BackupRepository.BackupRow> lastSuccess,
                                                      Optional<BackupRepository.BackupRow> lastFull,
                                                      List<Failure> failures,
-                                                     List<BackupRepository.DailyRow> daily) {
+                                                     List<BackupRepository.DailyRow> daily,
+                                                     List<String> withoutFull) {
+        BackupRepository.BackupRow success = lastSuccess.orElse(null);
+        BackupRepository.BackupRow full = lastFull.orElse(null);
         List<String> findings = new ArrayList<>();
         int severity = SEVERITY_OK;
 
-        if (lastFull.isEmpty()) {
+        if (full == null) {
             severity = SEVERITY_HIGH;
-            findings.add("No existe ningún respaldo completo exitoso registrado.");
+            findings.add("No existe ningún respaldo completo exitoso registrado en esta instancia.");
         } else {
-            long fullDays = Duration.between(lastFull.get().startedAt(), now).toDays();
+            long fullDays = Duration.between(full.startedAt(), now).toDays();
             if (fullDays > FULL_CRITICAL_DAYS) {
                 severity = SEVERITY_HIGH;
             } else if (fullDays > FULL_WARNING_DAYS) {
@@ -179,6 +192,13 @@ public class BackupService {
             }
             if (fullDays > FULL_WARNING_DAYS) {
                 findings.add("El último respaldo completo exitoso tiene %d días.".formatted(fullDays));
+            }
+
+            if (!withoutFull.isEmpty()) {
+                severity = Math.max(severity, SEVERITY_MODERATE);
+                String names = withoutFull.stream().limit(5).collect(Collectors.joining(", "))
+                        + (withoutFull.size() > 5 ? "…" : "");
+                findings.add("%d base(s) sin respaldo completo exitoso: %s.".formatted(withoutFull.size(), names));
             }
         }
 
@@ -200,33 +220,37 @@ public class BackupService {
                     .formatted(damaged, DAYS_WINDOW));
         }
 
-        if (lastSuccess.isPresent()) {
-            long hours = Duration.between(lastSuccess.get().startedAt(), now).toHours();
+        if (success != null) {
+            long hours = Duration.between(success.startedAt(), now).toHours();
             if (hours > STALE_SUCCESS_HOURS) {
                 severity = Math.max(severity, SEVERITY_MODERATE);
                 findings.add("Han pasado %d h desde el último respaldo exitoso.".formatted(hours));
             }
         }
 
-        return switch (severity) {
-            case SEVERITY_OK -> new BackupDTO.Assessment(
+        if (severity == SEVERITY_OK && full != null) {
+            return new BackupDTO.Assessment(
                     STATUS_ONLINE,
                     "Respaldos en buen estado",
                     "El último respaldo completo exitoso fue %s y no hay fallos en los últimos %d días."
-                            .formatted(BackupUtils.formatAge(
-                                    Duration.between(lastFull.orElseThrow().startedAt(), now).toHours()), DAYS_WINDOW),
+                            .formatted(BackupUtils.formatAge(Duration.between(full.startedAt(), now).toHours()),
+                                    DAYS_WINDOW),
                     null);
-            case SEVERITY_MODERATE -> new BackupDTO.Assessment(
-                    STATUS_WARNING,
-                    "Riesgo moderado detectado",
-                    String.join(" ", findings),
-                    "Ejecute un respaldo FULL y revise la causa de los fallos para reducir el riesgo.");
-            default -> new BackupDTO.Assessment(
+        }
+
+        if (severity == SEVERITY_HIGH) {
+            return new BackupDTO.Assessment(
                     STATUS_OFFLINE,
                     "Riesgo alto detectado",
                     String.join(" ", findings),
                     "Ejecute un respaldo FULL de inmediato: la recuperación ante un fallo no está garantizada.");
-        };
+        }
+
+        return new BackupDTO.Assessment(
+                STATUS_WARNING,
+                "Riesgo moderado detectado",
+                String.join(" ", findings),
+                "Ejecute un respaldo FULL y revise la causa de los fallos para reducir el riesgo.");
     }
 
     private BackupDTO.Policy toPolicy(String scope, LocalDateTime now) {

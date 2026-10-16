@@ -9,7 +9,8 @@ public record BackupDTO(
         List<HistoryItem> history,
         List<Day> days,
         Assessment assessment,
-        Policy policy
+        Policy policy,
+        Scan scan
 ) {
 
     public record Metrics(LocalDateTime lastSuccessAt, String lastType, Long lastDurationMin) {
@@ -32,4 +33,8 @@ public record BackupDTO(
 
     public record PolicyRow(String type, String frequency, String retention) {
     }
+
+    public record Scan(List<String> databases, List<String> warnings) {
+    }
+
 }

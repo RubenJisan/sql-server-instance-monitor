@@ -1,12 +1,9 @@
 package grupo1.backend.data;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -15,12 +12,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class BackupRepository {
 
-    private static final String SYSTEM_DATABASES = "('master', 'model', 'msdb', 'tempdb')";
     private static final String BACKUP_TYPES = "('D', 'I', 'L')";   // FULL, DIFF, LOG
 
     private static final String BACKUP_COLUMNS = """
@@ -48,6 +43,52 @@ public class BackupRepository {
 
     private record Scope(String clause, Object[] args) {
     }
+
+    private static Scope scope(String database) {
+        if (!hasText(database)) {
+            return new Scope("1 = 1", new Object[0]);
+        }
+        return new Scope("bs.database_name = ?", new Object[]{database});
+    }
+
+    public List<String> findRecoveryModels(String database) {
+        boolean filtered = hasText(database);
+        String sql = "SELECT DISTINCT d.recovery_model_desc FROM sys.databases d "
+                + "WHERE d.database_id <> 2 AND d.source_database_id IS NULL"
+                + (filtered ? " AND d.name = ?" : "");
+        return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
+    }
+
+    public List<String> findBackupableDatabases(String database) {
+        boolean filtered = hasText(database);
+        String sql = "SELECT d.name FROM sys.databases d "
+                + "WHERE d.database_id <> 2 AND d.state_desc = 'ONLINE' AND d.source_database_id IS NULL"
+                + (filtered ? " AND d.name = ?" : "")
+                + " ORDER BY d.name";
+        return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
+    }
+
+    /** Bases en línea que nunca han tenido un respaldo completo exitoso. */
+    public List<String> findDatabasesWithoutFull(String database) {
+        boolean filtered = hasText(database);
+        String sql = """
+            SELECT d.name
+            FROM sys.databases d
+            WHERE d.database_id <> 2 AND d.source_database_id IS NULL AND d.state_desc = 'ONLINE'
+              AND NOT EXISTS (
+                  SELECT 1 FROM msdb.dbo.backupset bs
+                  WHERE bs.database_name COLLATE DATABASE_DEFAULT = d.name COLLATE DATABASE_DEFAULT
+                    AND bs.type = 'D' AND bs.is_damaged = 0)
+            """ + (filtered ? " AND d.name = ?" : "") + " ORDER BY d.name";
+        return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
+    }
+
+    /** Si no hay permiso sobre xp_readerrorlog lanza DataAccessException; el service lo informa como warning. */
+    public List<FailureRow> findBackupFailures() {
+        return jdbc().query("EXEC master.dbo.xp_readerrorlog 0, 1, N'BACKUP failed to complete'",
+                (rs, i) -> new FailureRow(toLocal(rs.getTimestamp("LogDate")), rs.getString("Text")));
+    }
+
 
     private static final RowMapper<BackupRow> BACKUP_MAPPER = (rs, i) -> new BackupRow(
             rs.getLong("backup_set_id"),
@@ -152,56 +193,16 @@ public class BackupRepository {
                 args(scope)).stream().findFirst();
     }
 
-    public List<String> findRecoveryModels(String database) {
-        boolean filtered = hasText(database);
-        String sql = "SELECT DISTINCT d.recovery_model_desc FROM sys.databases d "
-                + "WHERE d.database_id > 4 AND d.source_database_id IS NULL"
-                + (filtered ? " AND d.name = ?" : "");
-        return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
-    }
-
-    /** Fallos de respaldo registrados en el log de errores actual. Requiere permiso sobre xp_readerrorlog. */
-    public List<FailureRow> findBackupFailures() {
-        try {
-            return jdbc().query("EXEC master.dbo.xp_readerrorlog 0, 1, N'BACKUP failed to complete'",
-                    (rs, i) -> new FailureRow(toLocal(rs.getTimestamp("LogDate")), rs.getString("Text")));
-        } catch (DataAccessException e) {
-            log.warn("No se pudo leer el log de errores de SQL Server; no se informarán respaldos fallidos: {}",
-                    e.getMostSpecificCause().getMessage());
-            return List.of();
-        }
-    }
-
-    /* ------------------------- Ejecución de respaldos ------------------------- */
-
-    public List<String> findBackupableDatabases(String database) {
-        boolean filtered = hasText(database);
-        String sql = "SELECT d.name FROM sys.databases d "
-                + "WHERE d.database_id > 4 AND d.state_desc = 'ONLINE' AND d.source_database_id IS NULL"
-                + (filtered ? " AND d.name = ?" : "")
-                + " ORDER BY d.name";
-        return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
-    }
-
-    /** Directorio de respaldos por defecto de la instancia (NULL si la versión no lo expone). */
     public String findDefaultBackupDirectory() {
         return jdbc().queryForObject(
                 "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(512))", String.class);
     }
 
     public void backupFull(String databaseName, String filePath) {
-        // databaseName proviene de sys.databases y se cita; la ruta viaja como parámetro.
-        String sql = "BACKUP DATABASE " + quote(databaseName) + " TO DISK = ? WITH CHECKSUM, INIT";
-        jdbc().update(sql, filePath);
-    }
-
-    /* ------------------------- Helpers ------------------------- */
-
-    private static Scope scope(String database) {
-        if (!hasText(database)) {
-            return new Scope("bs.database_name NOT IN " + SYSTEM_DATABASES, new Object[0]);
-        }
-        return new Scope("bs.database_name = ?", new Object[]{database});
+        // databaseName viene de sys.databases y filePath lo arma el service con nombres saneados
+        String sql = "BACKUP DATABASE " + quote(databaseName)
+                + " TO DISK = N'" + filePath.replace("'", "''") + "' WITH CHECKSUM, INIT";
+        jdbc().execute(sql);
     }
 
     private static Object[] args(Scope scope, Object... leading) {

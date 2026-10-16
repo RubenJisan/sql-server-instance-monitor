@@ -4,18 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const API = 'http://localhost:8080/api';
 
 const emptyBackup = {
-    metrics: {
-        lastSuccessAt: null,     // ISO: '2026-10-05T02:00:00'
-        lastType: null,          // 'FULL' | 'DIFF' | 'LOG'
-        lastDurationMin: null
-    },
-    history: [],                 // { id, startedAt, type, sizeGb, durationMin, status }
-    days: [],                    // { date: '2026-10-05', status } (últimos 14 días)
-    assessment: null,            // { level, title, detail, recommendation }
-    policy: null                 // { rows: [{ type, frequency, retention }], recoveryModel, destination, verification }
+    metrics: { lastSuccessAt: null, lastType: null, lastDurationMin: null },
+    history: [],
+    days: [],
+    assessment: null,
+    policy: null,
+    scan: { databases: [], warnings: [] }
 };
-
-/* status / level siempre usan el mismo vocabulario: 'online' | 'warning' | 'offline' */
 
 const backupTypes = {
     FULL: { label: 'Completo (FULL)',            name: 'Completo',             command: 'BACKUP DATABASE · FULL' },
@@ -23,9 +18,6 @@ const backupTypes = {
     LOG:  { label: 'Log de transacciones (LOG)', name: 'Log de transacciones', command: 'BACKUP LOG' }
 };
 
-/* ------------------------------------------------------------------ */
-/*  Utilidades (lambdas, sin clases)                                   */
-/* ------------------------------------------------------------------ */
 const statusLabels = { online: 'Exitoso', warning: 'Con advertencias', offline: 'Fallido', none: 'Sin respaldo' };
 const badgeClasses = { online: 'badgeOk', warning: 'badgeWarn', offline: 'badgeErr' };
 const toneClasses  = { online: 'textOk',  warning: 'textWarn',  offline: 'textErr' };
@@ -59,7 +51,6 @@ const formatDateTime = (value, withYear = true) => {
     return `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const formatSize     = (gb)  => (gb == null ? '—' : `${gb.toFixed(1)} GB`);
 const formatDuration = (min) => (min == null ? '—' : `${min} min`);
 
 const hoursSince = (value) => (Date.now() - parseDate(value).getTime()) / 36e5;
@@ -159,7 +150,6 @@ function Backup() {
         try {
             const data = await ApiClient.request('/backups/overview');
             setBackup(data);
-            setBackup(emptyBackup);
             setPageMessage(null);
         } catch (e) {
             const noActiveConnection = e.status === 409;
@@ -178,19 +168,16 @@ function Backup() {
             const data = await ApiClient.request('/connections');
             setProfiles(data.profiles);
             setActiveId(data.activeId);
-            setProfiles([]);
-            setActiveId(null);
         } catch (e) {
             setPageMessage({ type: 'error', text: e.message });
         }
     }, []);
 
-    /* ----------------------- Acciones ----------------------- */
-
     async function connectProfile() {
         if (!selectedId) return;
         setDialogError('');
         try {
+            await ApiClient.request(`/connections/${selectedId}/activate`, { method: 'POST' });
             setActiveId(selectedId);
             await Promise.all([loadBackup(), loadProfiles()]);
             closeDialog(instanceDialogRef);
@@ -207,10 +194,15 @@ function Backup() {
         try {
             const result = await ApiClient.request('/backups/full', { method: 'POST' });
             const failed = result.results.filter(r => !r.ok);
-            setToast(failed.length
-                ? `FULL con errores en: ${failed.map(f => f.database).join(', ')}`
-                : `Respaldo FULL completado (${result.results.length} base(s))`);
-            await loadBackup();
+            await loadBackup();   // recarga primero: loadBackup limpia pageMessage
+            if (failed.length === 0) {
+                setToast(`Respaldo FULL completado (${result.results.length} base(s))`);
+            } else {
+                setPageMessage({
+                    type: 'error',
+                    text: failed.map(f => `${f.database}: ${f.message}`).join(' | ')
+                });
+            }
         } catch (e) {
             setToast(`No se pudo iniciar el respaldo FULL: ${e.message}`);
         } finally {
@@ -255,7 +247,7 @@ function Backup() {
                 <div>
                     <h1>Respaldo y recuperación</h1>
                     <p className="sub">
-                        Estado de las copias de seguridad de {display(activeProfile?.name)} (msdb.dbo.backupset).
+                        Estado de las copias de seguridad de la instancia {display(activeProfile?.name)} (msdb.dbo.backupset).
                     </p>
                 </div>
                 <div className="controls">
@@ -284,8 +276,11 @@ function Backup() {
                     {pageMessage.text}
                 </div>
             )}
-
-            {/* ----- Interpretación administrativa ----- */}
+            {backup.scan?.warnings?.length > 0 && (
+                <div className="warnBox pageMessage" role="status">
+                    {backup.scan.warnings.join(' ')}
+                </div>
+            )}
             {assessment && (
                 <div
                     className={`riskBanner ${riskClasses[assessment.level] ?? 'riskWarn'}`}
@@ -352,21 +347,19 @@ function Backup() {
                             <thead>
                             <tr>
                                 <th>Fecha</th>
+                                <th>Base de datos</th>
                                 <th>Tipo</th>
-                                <th className="alignRight">Tamaño</th>
-                                <th className="alignRight">Duración</th>
-                                <th>Estado</th>
                             </tr>
                             </thead>
                             <tbody>
                             {loading && (
                                 <tr>
-                                    <td colSpan={5} className="emptyCell">Cargando...</td>
+                                    <td colSpan={6} className="emptyCell">Cargando...</td>
                                 </tr>
                             )}
                             {!loading && history.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="emptyCell">Sin datos</td>
+                                    <td colSpan={6} className="emptyCell">Sin datos</td>
                                 </tr>
                             )}
                             {history.map(h => (
