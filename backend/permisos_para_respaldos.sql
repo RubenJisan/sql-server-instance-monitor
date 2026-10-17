@@ -37,3 +37,5 @@ EXECUTE AS LOGIN = 'dbwatch_monitor';
 SELECT permission_name FROM fn_my_permissions(NULL, 'SERVER')
 WHERE permission_name IN ('VIEW ANY ERROR LOG', 'VIEW SERVER STATE');
 REVERT;
+
+BACKUP DATABASE master TO DISK = N'/ruta/que/no/existe/x.bak';

@@ -349,6 +349,9 @@ function Backup() {
                                 <th>Fecha</th>
                                 <th>Base de datos</th>
                                 <th>Tipo</th>
+                                <th className="alignRight">Tamaño</th>
+                                <th className="alignRight">Duración</th>
+                                <th>Estado</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -365,12 +368,14 @@ function Backup() {
                             {history.map(h => (
                                 <tr key={h.id}>
                                     <td className="mono">{formatDateTime(h.startedAt)}</td>
+                                    <td className="mono">{display(h.database)}</td>
+                                    <td>{backupTypes[h.type]?.label ?? display(h.type)}</td>
                                     <td className="alignRight">{display(h.size)}</td>
                                     <td className="alignRight">{formatDuration(h.durationMin)}</td>
                                     <td>
-                                        <span className={badge(h.status)}>
-                                            {statusLabels[h.status] ?? display(h.status)}
-                                        </span>
+                    <span className={badge(h.status)}>
+                        {statusLabels[h.status] ?? display(h.status)}
+                    </span>
                                     </td>
                                 </tr>
                             ))}

@@ -1,13 +1,17 @@
 package grupo1.backend.data;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -83,10 +87,27 @@ public class BackupRepository {
         return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
     }
 
-    /** Si no hay permiso sobre xp_readerrorlog lanza DataAccessException; el service lo informa como warning. */
     public List<FailureRow> findBackupFailures() {
-        return jdbc().query("EXEC master.dbo.xp_readerrorlog 0, 1, N'BACKUP failed to complete'",
-                (rs, i) -> new FailureRow(toLocal(rs.getTimestamp("LogDate")), rs.getString("Text")));
+        return jdbc().execute((ConnectionCallback<List<FailureRow>>) connection -> {
+            List<FailureRow> rows = new ArrayList<>();
+            try (Statement statement = connection.createStatement()) {
+                boolean hasResultSet = statement.execute(
+                        "EXEC master.dbo.xp_readerrorlog 0, 1, N'BACKUP failed to complete'");
+                while (true) {
+                    if (hasResultSet) {
+                        try (ResultSet rs = statement.getResultSet()) {
+                            while (rs.next()) {
+                                rows.add(new FailureRow(toLocal(rs.getTimestamp("LogDate")), rs.getString("Text")));
+                            }
+                        }
+                    } else if (statement.getUpdateCount() == -1) {
+                        break;
+                    }
+                    hasResultSet = statement.getMoreResults();
+                }
+            }
+            return rows;
+        });
     }
 
 
