@@ -51,14 +51,6 @@ const navItems = [
     {
         path: '/maintenance',
         label: 'Mantenimiento preventivo',
-        element: <h1>Mantenimiento preventivo</h1>,
-        icon: (
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 8-8z" />
-        )
-    },
-    {
-        path: '/maintenance',
-        label: 'Mantenimiento preventivo',
         element: <Maintenance />,
         icon: (
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 8-8z" />
