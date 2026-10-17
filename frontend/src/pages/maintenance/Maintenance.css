@@ -1,0 +1,27 @@
+@import '../audit/Audit.css';
+
+.maintenance select,
+.maintenance input[type='search'] {
+    display: block;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    max-width: 100%;
+}
+
+.maintenance a { color: var(--primary); }
+.maintenanceMetrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.maintenanceCard { margin-top: 20px; }
+.maintenanceNote { margin: 12px 0; }
+.maintenanceSearch { display: block; margin: 16px 0; }
+.maintenanceProblem { min-width: 220px; overflow-wrap: anywhere; white-space: normal; }
+.maintenanceSuccess { padding: 14px; border: 1px solid var(--ok); border-radius: 12px; color: var(--ok); }
+.maintenance .modalBody p { margin-bottom: 12px; overflow-wrap: anywhere; }
+.maintenance .controls { align-items: flex-end; }
+
+@media (max-width: 640px) {
+    .maintenanceMetrics { grid-template-columns: 1fr; }
+}

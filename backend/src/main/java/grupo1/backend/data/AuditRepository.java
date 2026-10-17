@@ -131,6 +131,8 @@ public class AuditRepository {
               AND d.referenced_class = 1
               AND d.referenced_id IS NULL
               AND d.is_ambiguous = 0
+              AND d.is_caller_dependent = 0
+              AND o.is_ms_shipped = 0
               AND d.referenced_database_name IS NULL
               AND d.referenced_server_name IS NULL
             ORDER BY SCHEMA_NAME(o.schema_id), o.name
