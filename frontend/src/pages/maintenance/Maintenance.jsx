@@ -78,7 +78,15 @@ function Maintenance() {
         setResult(null);
         dialog.current.close();
         try {
-            const response = await request(`/${pending.action}`, { ...pending, confirmed: true, fullScan });
+            const response = await request(`/${pending.action}`, {
+                profileId: pending.profileId,
+                database: pending.database,
+                objectId: pending.objectId,
+                schema: pending.schema,
+                name: pending.name,
+                confirmed: true,
+                fullScan
+            });
             setResult(response);
         } catch (exception) {
             setResult({ ok: false, message: `No se pudo confirmar el resultado. ${exception.message}. Actualice el análisis antes de reintentar.` });

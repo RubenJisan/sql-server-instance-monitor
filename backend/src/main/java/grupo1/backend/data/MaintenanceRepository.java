@@ -6,6 +6,7 @@ import grupo1.backend.logic.dto.MaintenanceDTO.Table;
 import grupo1.backend.logic.utils.AuditUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -85,14 +86,16 @@ public class MaintenanceRepository {
     }
 
     private void execute(JdbcTemplate jdbc, String sql, String... parameters) {
-        jdbc.execute(connection -> {
-            PreparedStatement statement = connection.prepareStatement(sql);
-            statement.setQueryTimeout(timeoutSeconds);
-            for (int index = 0; index < parameters.length; index++) {
-                statement.setNString(index + 1, parameters[index]);
+        jdbc.execute((ConnectionCallback<Void>) connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setQueryTimeout(timeoutSeconds);
+                for (int index = 0; index < parameters.length; index++) {
+                    statement.setNString(index + 1, parameters[index]);
+                }
+                statement.execute();
             }
-            return statement;
-        }, (org.springframework.jdbc.core.PreparedStatementCallback<Boolean>) PreparedStatement::execute);
+            return null;
+        });
     }
 
     static String qualified(String schema, String name) {

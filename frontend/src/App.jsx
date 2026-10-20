@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router';
 import Navbar from '@/components/Navbar';
-import navItems from '@/components/navItems';
+import navItems from '@/components/NavItems.jsx';
 import './App.css';
 
 function App() {
