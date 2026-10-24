@@ -124,7 +124,6 @@ public class BackupRepository {
 
     private final ActiveConnection activeConnection;
 
-    // AJUSTAR: usa exactamente la misma forma que InstanceRepository para obtener el JdbcTemplate
     private JdbcTemplate jdbc() {
         return activeConnection.jdbcTemplate();
     }
