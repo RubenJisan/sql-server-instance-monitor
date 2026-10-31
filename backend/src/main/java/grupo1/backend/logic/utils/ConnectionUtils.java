@@ -24,8 +24,8 @@ public final class ConnectionUtils {
                 : "";
         String integrated = profile.windowsAuthentication() ? ";integratedSecurity=true" : "";
 
-        return "jdbc:sqlserver://%s%s;databaseName=master;encrypt=%b;trustServerCertificate=%b;loginTimeout=5%s"
-                .formatted(address, instance, profile.encrypt(), profile.trustServerCertificate(), integrated);
+        return "jdbc:sqlserver://%s%s;databaseName=master;encrypt=false;trustServerCertificate=true;loginTimeout=5%s"
+                .formatted(address, instance, integrated);
     }
 
     public static HikariDataSource createDataSource(Connection profile, int maxPoolSize) {

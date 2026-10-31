@@ -21,9 +21,7 @@ const emptyConfig = {
     authentication: 'sqlServer',
     username: '',
     password: '',
-    refreshSeconds: '10',
-    encrypt: true,
-    trustServerCertificate: false
+    refreshSeconds: '10'
 };
 
 const authOptions = [
@@ -130,8 +128,8 @@ class InstanceUtils {
             authentication: config.authentication,
             username: config.username.trim(),
             password: config.password,
-            encrypt: config.encrypt,
-            trustServerCertificate: config.trustServerCertificate,
+            encrypt: false,
+            trustServerCertificate: true,
             refreshSeconds: Number(config.refreshSeconds)
         };
     }
@@ -145,9 +143,7 @@ class InstanceUtils {
             authentication: profile.authentication,
             username: profile.username ?? '',
             password: '',
-            refreshSeconds: String(profile.refreshSeconds),
-            encrypt: profile.encrypt,
-            trustServerCertificate: profile.trustServerCertificate
+            refreshSeconds: String(profile.refreshSeconds)
         };
     }
 }
@@ -673,23 +669,6 @@ function Instance() {
                             ))}
                         </select>
                     </div>
-
-                    <label className="check">
-                        <input
-                            type="checkbox"
-                            checked={config.encrypt}
-                            onChange={e => updateConfig('encrypt', e.target.checked)}
-                        />
-                        Cifrar conexión (Encrypt=True)
-                    </label>
-                    <label className="check">
-                        <input
-                            type="checkbox"
-                            checked={config.trustServerCertificate}
-                            onChange={e => updateConfig('trustServerCertificate', e.target.checked)}
-                        />
-                        Confiar en el certificado del servidor
-                    </label>
 
                     {testResult && <div className="testResult">✓ {testResult}</div>}
                     {dialogError && <div className="errorBox" role="alert">{dialogError}</div>}
