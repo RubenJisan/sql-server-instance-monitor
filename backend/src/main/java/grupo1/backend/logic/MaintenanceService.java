@@ -25,7 +25,7 @@ public class MaintenanceService {
     private final AuditRepository auditRepository;
     private final MaintenanceRepository repository;
 
-    public MaintenanceDTO overview(String database) {
+    public MaintenanceDTO getOverview(String database) {
         synchronized (activeConnection) {
             Connection profile = activeConnection.profile().orElseThrow(NoActiveConnectionException::new);
             JdbcTemplate jdbc = activeConnection.jdbcTemplate();

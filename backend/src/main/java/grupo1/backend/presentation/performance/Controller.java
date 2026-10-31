@@ -27,7 +27,7 @@ public class Controller {
 
     @GetMapping("/overview")
     public PerformanceDTO overview(@RequestParam(required = false) String range) {
-        return performanceService.overview(range);
+        return performanceService.getOverview(range);
     }
 
     @PostMapping("/sessions/{sessionId}/kill")

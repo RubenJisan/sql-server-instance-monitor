@@ -36,7 +36,6 @@ const display = (value, suffix = '') =>
 
 const pad = (n) => String(n).padStart(2, '0');
 
-// 'YYYY-MM-DD' se interpreta como fecha local (no UTC) para evitar desfase de un día
 const parseDate = (value) =>
     new Date(value.length === 10 ? `${value}T00:00:00` : value);
 
@@ -63,18 +62,12 @@ const timeAgo = (value) => {
     return `hace ${days} ${days === 1 ? 'día' : 'días'} ${hours} h`;
 };
 
-// Antigüedad del último respaldo exitoso → semáforo
 const ageStatus = (hours) => (hours <= 26 ? 'online' : hours <= 72 ? 'warning' : 'offline');
 
-// Tasa de éxito (%) → semáforo
 const rateStatus = (rate) => {
     if (rate == null) return null;
     return rate >= 95 ? 'online' : rate >= 80 ? 'warning' : 'offline';
 };
-
-/* ------------------------------------------------------------------ */
-/*  Cliente HTTP (listo para cuando exista el backend)                 */
-/* ------------------------------------------------------------------ */
 
 class ApiError extends Error {
     constructor(message, status) {
@@ -110,10 +103,6 @@ class ApiClient {
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Componente                                                         */
-/* ------------------------------------------------------------------ */
-
 function Backup() {
     const [backup, setBackup] = useState(emptyBackup);
     const [profiles, setProfiles] = useState([]);
@@ -132,7 +121,6 @@ function Backup() {
     const { metrics, history, days, assessment, policy } = backup;
     const activeProfile = profiles.find(p => p.id === activeId) ?? null;
 
-    /* ----------------------- Datos derivados ----------------------- */
 
     const okDays   = days.filter(d => d.status === 'online').length;
     const warnDays = days.filter(d => d.status === 'warning').length;
@@ -144,7 +132,6 @@ function Backup() {
     const lastType   = backupTypes[metrics.lastType];
     const rateTone   = toneClasses[rateStatus(successRate)] ?? '';
 
-    /* ----------------------- Carga de datos ----------------------- */
 
     const loadBackup = useCallback(async () => {
         try {
@@ -194,7 +181,7 @@ function Backup() {
         try {
             const result = await ApiClient.request('/backups/full', { method: 'POST' });
             const failed = result.results.filter(r => !r.ok);
-            await loadBackup();   // recarga primero: loadBackup limpia pageMessage
+            await loadBackup();
             if (failed.length === 0) {
                 setToast(`Respaldo FULL completado (${result.results.length} base(s))`);
             } else {
@@ -210,7 +197,6 @@ function Backup() {
         }
     }
 
-    /* ----------------------- Efectos ----------------------- */
 
     useEffect(() => {
         (async () => {
@@ -224,7 +210,6 @@ function Backup() {
         return () => clearTimeout(timer);
     }, [toast]);
 
-    /* ----------------------- Diálogos ----------------------- */
 
     function openDialog(ref)  { ref.current?.showModal(); }
     function closeDialog(ref) { ref.current?.close(); }
@@ -239,7 +224,6 @@ function Backup() {
         openDialog(instanceDialogRef);
     }
 
-    /* ----------------------- Render ----------------------- */
 
     return (
         <div className="backupPage">
@@ -296,7 +280,7 @@ function Backup() {
                 </div>
             )}
 
-            {/* ----- KPIs ----- */}
+
             <div className="grid cols4">
                 <div className="card kpi">
                     <div className="kpiLabel">Último respaldo exitoso</div>
@@ -336,7 +320,6 @@ function Backup() {
             </div>
 
             <div className="grid split">
-                {/* ----- Historial ----- */}
                 <div className="card">
                     <h2>
                         Historial de respaldos
@@ -383,8 +366,6 @@ function Backup() {
                         </table>
                     </div>
                 </div>
-
-                {/* ----- Últimos 14 días ----- */}
                 <div className="card">
                     <h2>Últimos {days.length || 14} días</h2>
                     <div
@@ -416,8 +397,6 @@ function Backup() {
                     </div>
                 </div>
             </div>
-
-            {/* ----- Diálogo de política de retención ----- */}
             <dialog
                 ref={policyDialogRef}
                 className="modal"
@@ -495,8 +474,6 @@ function Backup() {
                     </button>
                 </div>
             </dialog>
-
-            {/* ----- Diálogo de selección de instancia ----- */}
             <dialog
                 ref={instanceDialogRef}
                 className="modal"

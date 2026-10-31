@@ -31,7 +31,7 @@ public class ConnectionService {
     private final ProfileData profileStore;
     private final ActiveConnection activeConnection;
 
-    public ConnectionOverviewDTO overview() {
+    public ConnectionOverviewDTO getOverview() {
         List<Connection> profiles = profileStore.findAll().stream()
                 .map(Connection::withoutPassword)
                 .toList();

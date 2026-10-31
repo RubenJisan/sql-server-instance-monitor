@@ -49,7 +49,7 @@ public class AuditService {
 
     private final AuditRepository auditRepository;
 
-    public AuditDTO overview() {
+    public AuditDTO getOverview() {
         List<LoginRow> logins = auditRepository.findLogins();
         List<RoleRow> roleRows = auditRepository.findRoles();
         List<MembershipRow> memberships = auditRepository.findMemberships();

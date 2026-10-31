@@ -56,9 +56,7 @@ public class BackupService {
     private final BackupRepository backupRepository;
     private final ActiveConnection activeConnection;
 
-    /* ------------------------- GET /overview ------------------------- */
-
-    public BackupDTO overview(String database) {
+    public BackupDTO getOverview(String database) {
         activeConnection.profile().orElseThrow(NoActiveConnectionException::new);
         String scope = BackupUtils.normalizeDatabase(database);
         List<String> warnings = new ArrayList<>();

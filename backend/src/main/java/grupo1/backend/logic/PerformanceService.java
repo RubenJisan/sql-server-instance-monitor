@@ -115,7 +115,7 @@ public class PerformanceService {
     private final InstanceRepository instanceRepository;
     private final ActiveConnection activeConnection;
 
-    public PerformanceDTO overview(String requestedRange) {
+    public PerformanceDTO getOverview(String requestedRange) {
         TimeRange range = PerformanceUtils.parseRange(requestedRange);
         Connection profile = activeConnection.profile().orElseThrow(NoActiveConnectionException::new);
         InstanceRepository.InstanceRow instance = instanceRepository.findInstance();
@@ -198,7 +198,7 @@ public class PerformanceService {
             throw new IllegalArgumentException("Formato no válido: %s. Use pdf, xlsx o csv.".formatted(format));
         }
         Set<String> included = resolveSections(sections);
-        PerformanceDTO data = overview(range);
+        PerformanceDTO data = getOverview(range);
         ReportUtils.Report report = toReport(data, included);
         byte[] content = switch (type) {
             case "pdf" -> ReportUtils.toPdf(report);

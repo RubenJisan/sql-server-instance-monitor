@@ -109,12 +109,12 @@ class MaintenanceServiceTests {
     void scanDistinguishesDependencyErrorsFromPermissionWarnings() {
         when(repository.unresolved(jdbc, "Example", "dbo", "broken"))
                 .thenThrow(new InvalidDataAccessResourceUsageException("binding", new SQLException("Invalid column", "S0001", 207)));
-        var broken = service.overview("Example");
+        var broken = service.getOverview("Example");
         assertEquals(1, broken.objects().size());
         assertTrue(broken.warnings().isEmpty());
         doThrow(new InvalidDataAccessResourceUsageException("denied", new SQLException("Permission denied", "S0001", 229)))
                 .when(repository).unresolved(jdbc, "Example", "dbo", "broken");
-        var partial = service.overview("Example");
+        var partial = service.getOverview("Example");
         assertTrue(partial.objects().isEmpty());
         assertEquals(1, partial.warnings().size());
     }
@@ -122,8 +122,8 @@ class MaintenanceServiceTests {
     @Test
     void handlesNoActiveConnectionAndEmptyDatabaseList() {
         when(audit.findUserDatabases()).thenReturn(List.of());
-        assertNull(service.overview(null).database());
+        assertNull(service.getOverview(null).database());
         when(active.profile()).thenReturn(Optional.empty());
-        assertThrows(NoActiveConnectionException.class, () -> service.overview(null));
+        assertThrows(NoActiveConnectionException.class, () -> service.getOverview(null));
     }
 }

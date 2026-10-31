@@ -16,6 +16,6 @@ public class Controller {
 
     @GetMapping("/overview")
     public InstanceDTO overview() {
-        return instanceService.overview();
+        return instanceService.getOverview();
     }
 }

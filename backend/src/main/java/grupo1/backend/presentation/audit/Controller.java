@@ -16,6 +16,6 @@ public class Controller {
 
     @GetMapping("/overview")
     public AuditDTO overview() {
-        return auditService.overview();
+        return auditService.getOverview();
     }
 }

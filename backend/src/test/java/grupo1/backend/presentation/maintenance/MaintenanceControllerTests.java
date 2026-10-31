@@ -27,7 +27,7 @@ class MaintenanceControllerTests {
 
     @Test
     void overviewReportsMissingActiveConnection() throws Exception {
-        when(service.overview(null)).thenThrow(new NoActiveConnectionException());
+        when(service.getOverview(null)).thenThrow(new NoActiveConnectionException());
         mvc.perform(get("/api/maintenance/overview"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.message").isNotEmpty());
     }

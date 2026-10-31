@@ -26,7 +26,7 @@ public class Controller {
 
     @GetMapping
     public ConnectionOverviewDTO overview() {
-        return connectionService.overview();
+        return connectionService.getOverview();
     }
 
     @PostMapping

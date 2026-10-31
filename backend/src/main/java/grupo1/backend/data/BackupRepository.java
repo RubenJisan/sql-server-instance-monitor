@@ -72,7 +72,6 @@ public class BackupRepository {
         return jdbc().query(sql, (rs, i) -> rs.getString(1), filtered ? new Object[]{database} : new Object[0]);
     }
 
-    /** Bases en línea que nunca han tenido un respaldo completo exitoso. */
     public List<String> findDatabasesWithoutFull(String database) {
         boolean filtered = hasText(database);
         String sql = """

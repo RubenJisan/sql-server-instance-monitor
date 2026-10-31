@@ -20,7 +20,7 @@ public class Controller {
 
     @GetMapping("/overview")
     public BackupDTO overview(@RequestParam(required = false) String database) {
-        return backupService.overview(database);
+        return backupService.getOverview(database);
     }
 
     @PostMapping("/full")

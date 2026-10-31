@@ -19,7 +19,7 @@ public class Controller {
 
     @GetMapping("/overview")
     public MaintenanceDTO overview(@RequestParam(required = false) String database) {
-        return service.overview(database);
+        return service.getOverview(database);
     }
 
     @PostMapping("/statistics")

@@ -29,7 +29,7 @@ public class InstanceService {
     private final InstanceRepository instanceRepository;
     private final ActiveConnection activeConnection;
 
-    public InstanceDTO overview() {
+    public InstanceDTO getOverview() {
         Connection profile = activeConnection.profile().orElseThrow(NoActiveConnectionException::new);
         InstanceRepository.InstanceRow instance = instanceRepository.findInstance();
         InstanceRepository.MemoryRow memory = instanceRepository.findMemory();
