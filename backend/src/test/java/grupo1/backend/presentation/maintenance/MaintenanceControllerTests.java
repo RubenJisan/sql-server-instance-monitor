@@ -65,6 +65,20 @@ class MaintenanceControllerTests {
     }
 
     @Test
+    void statisticsReturnsUnverifiedStatusWithoutTurningItIntoSqlFailure() throws Exception {
+        when(service.run(eq("statistics"), any())).thenReturn(new Result(false, "statistics", "Example",
+                "dbo.sample", "Comando ejecutado; sin fecha disponible", Instant.now(), "unverified"));
+        mvc.perform(post("/api/maintenance/statistics").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"profileId":"profile","database":"Example","objectId":12,
+                         "schema":"dbo","name":"sample","confirmed":true,"fullScan":false}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.status").value("unverified"))
+                .andExpect(jsonPath("$.message").value("Comando ejecutado; sin fecha disponible"));
+    }
+
+    @Test
     void refreshPreservesFailedOperationResultInJson() throws Exception {
         when(service.run(eq("refresh"), any())).thenReturn(new Result(false, "refresh", "Example",
                 "dbo.sample", "Dependencia inexistente", Instant.now()));

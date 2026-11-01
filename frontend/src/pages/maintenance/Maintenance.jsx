@@ -102,6 +102,7 @@ function Maintenance() {
     const tables = overview?.tables.filter(matches) || [];
     const objects = overview?.objects.filter(matches) || [];
     const disabled = loading || running;
+    const unverified = result?.status === 'unverified';
 
     return (
         <section className="maintenance" aria-busy={disabled}>
@@ -127,8 +128,8 @@ function Maintenance() {
 
             {error && <div className="errorBox pageMessage" role="alert">{error}</div>}
             {running && <div className="warnBox pageMessage" role="status">Ejecutando mantenimiento. Espere la confirmación del servidor.</div>}
-            {result && <div className={`${result.ok ? 'maintenanceSuccess' : 'errorBox'} pageMessage`} role="status">
-                <strong>{result.ok ? 'Operación completada' : 'Operación con errores o pendiente de verificar'}</strong>
+            {result && <div className={`${result.ok ? 'maintenanceSuccess' : unverified ? 'warnBox' : 'errorBox'} pageMessage`} role="status">
+                <strong>{result.ok ? 'Operación verificada' : unverified ? 'Comando ejecutado · resultado no verificable' : 'Operación con errores o pendiente de verificar'}</strong>
                 {result.object && <p>{result.database} · {result.object}</p>}
                 <p>{result.message}</p>
             </div>}
@@ -148,15 +149,19 @@ function Maintenance() {
                 </label>
                 <div className="card maintenanceCard">
                     <h2>Actualizar estadísticas <small>{tables.length} tablas</small></h2>
-                    <p className="sub maintenanceNote">Actualiza todas las estadísticas existentes de una tabla. La fecha corresponde a la estadística más antigua; los cambios muestran el máximo por estadística. «—» indica información no disponible.</p>
+                    <p className="sub maintenanceNote">Actualiza las estadísticas existentes: su cantidad no aumenta al actualizarlas. La fecha es la más antigua entre las disponibles y los cambios muestran el máximo por estadística; 0 es normal después de actualizar. Sin fecha puede indicar falta de filas o permisos, no necesariamente un error.</p>
                     <div className="tableWrap"><table>
-                        <thead><tr><th>Tabla</th><th>Estadísticas</th><th>Última actualización</th><th>Cambios</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Tabla</th><th>Estadísticas</th><th>Fecha estadística más antigua</th><th>Cambios</th><th>Disponibilidad de fechas</th><th>Acción</th></tr></thead>
                         <tbody>
-                        {!tables.length && <tr><td colSpan={5}>No hay tablas que coincidan. Las tablas optimizadas en memoria se excluyen.</td></tr>}
+                        {!tables.length && <tr><td colSpan={6}>No hay tablas que coincidan. Las tablas optimizadas en memoria se excluyen.</td></tr>}
                         {tables.map(table => <tr key={table.objectId}>
                             <td className="mono">{table.schema}.{table.name}</td><td>{table.statistics}</td>
-                            <td>{table.lastUpdated ? new Date(table.lastUpdated).toLocaleString('es-CR') : '—'}</td>
-                            <td>{table.modifications ?? '—'}</td>
+                            <td>{table.lastUpdated ? new Date(table.lastUpdated).toLocaleString('es-CR') : 'Sin fecha disponible'}</td>
+                            <td>{table.modifications ?? 'No disponible'}</td>
+                            <td className="maintenanceProblem">{!table.statistics ? 'Sin estadísticas existentes'
+                                : table.datedStatistics == null ? 'Actualice backend y análisis para consultar el detalle'
+                                    : table.datedStatistics === table.statistics ? `${table.datedStatistics} de ${table.statistics} con fecha`
+                                        : `${table.datedStatistics} de ${table.statistics} con fecha. Puede faltar información por ausencia de filas o permisos.`}</td>
                             <td><button className="btn" disabled={disabled || !table.statistics} onClick={() => confirm('statistics', table)}>Actualizar estadísticas</button></td>
                         </tr>)}
                         </tbody>

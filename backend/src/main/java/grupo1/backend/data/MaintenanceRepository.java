@@ -1,6 +1,8 @@
 package grupo1.backend.data;
 
 import java.sql.PreparedStatement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import grupo1.backend.logic.dto.MaintenanceDTO.Table;
 import grupo1.backend.logic.utils.AuditUtils;
@@ -24,6 +26,9 @@ public class MaintenanceRepository {
         }
     }
 
+    public record StatisticRow(int id, String name, LocalDateTime lastUpdated) {
+    }
+
     public void requireVisibility(JdbcTemplate jdbc, String database) {
         Integer visible = jdbc.queryForObject(inDatabase(database, """
                 SELECT HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION')
@@ -38,7 +43,8 @@ public class MaintenanceRepository {
                 SELECT t.object_id, SCHEMA_NAME(t.schema_id) AS schemaName, t.name,
                        COUNT(s.stats_id) AS [statistics],
                        CONVERT(varchar(33), MIN(p.last_updated), 126) AS lastUpdated,
-                       MAX(p.modification_counter) AS modifications
+                       MAX(p.modification_counter) AS modifications,
+                       COUNT(p.last_updated) AS datedStatistics
                 FROM sys.tables t
                 LEFT JOIN sys.stats s ON s.object_id = t.object_id
                 OUTER APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) p
@@ -47,7 +53,21 @@ public class MaintenanceRepository {
                 ORDER BY SCHEMA_NAME(t.schema_id), t.name
                 """), (rs, rowNum) -> new Table(rs.getInt("object_id"), rs.getString("schemaName"),
                 rs.getString("name"), rs.getInt("statistics"), rs.getString("lastUpdated"),
-                rs.getObject("modifications", Long.class)));
+                rs.getObject("modifications", Long.class), rs.getInt("datedStatistics")));
+    }
+
+    public List<StatisticRow> statistics(JdbcTemplate jdbc, String database, int objectId) {
+        return jdbc.query(inDatabase(database, """
+                SELECT s.stats_id, s.name, p.last_updated
+                FROM sys.stats s
+                OUTER APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) p
+                WHERE s.object_id = @objectId
+                ORDER BY s.stats_id
+                """, "@objectId int", "@objectId=?"), (rs, rowNum) -> {
+            Timestamp updated = rs.getTimestamp("last_updated");
+            return new StatisticRow(rs.getInt("stats_id"), rs.getString("name"),
+                    updated == null ? null : updated.toLocalDateTime());
+        }, objectId);
     }
 
     public List<ModuleRow> modules(JdbcTemplate jdbc, String database) {

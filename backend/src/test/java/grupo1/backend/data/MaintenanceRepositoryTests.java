@@ -2,6 +2,7 @@ package grupo1.backend.data;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,6 +12,27 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class MaintenanceRepositoryTests {
+    @Test
+    void statisticsSnapshotPreservesNullDateAndBindsObjectIdentity() throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ResultSet rows = mock(ResultSet.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(rows);
+        when(rows.next()).thenReturn(true, false);
+        when(rows.getInt("stats_id")).thenReturn(3);
+        when(rows.getString("name")).thenReturn("empty_stat");
+        var snapshot = new MaintenanceRepository(300).statistics(new JdbcTemplate(dataSource), "Example", 12);
+        assertEquals(1, snapshot.size());
+        assertEquals(3, snapshot.getFirst().id());
+        assertNull(snapshot.getFirst().lastUpdated());
+        verify(statement).setObject(1, 12);
+        verify(rows).close();
+        verify(statement).close();
+    }
+
     @Test
     void quotesIdentifiersAndEscapesDynamicSqlLiterals() {
         assertEquals("[odd]]schema].[o'bject]", MaintenanceRepository.qualified("odd]schema", "o'bject"));

@@ -1,12 +1,14 @@
 package grupo1.backend.logic;
 
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import grupo1.backend.data.ActiveConnection;
 import grupo1.backend.data.AuditRepository;
 import grupo1.backend.data.MaintenanceRepository;
 import grupo1.backend.data.MaintenanceRepository.ModuleRow;
+import grupo1.backend.data.MaintenanceRepository.StatisticRow;
 import grupo1.backend.logic.dto.MaintenanceDTO.Request;
 import grupo1.backend.logic.dto.MaintenanceDTO.Table;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +34,9 @@ class MaintenanceServiceTests {
         when(audit.findUserDatabases()).thenReturn(List.of("Example"));
         when(repository.modules(jdbc, "Example")).thenReturn(List.of(module));
         when(repository.tables(jdbc, "Example")).thenReturn(List.of(new Table(12, "dbo", "broken", 1, null, 2L)));
+        when(repository.statistics(jdbc, "Example", 12)).thenReturn(
+                List.of(new StatisticRow(1, "stat", LocalDateTime.of(2026, 10, 30, 14, 0))),
+                List.of(new StatisticRow(1, "stat", LocalDateTime.of(2026, 11, 1, 14, 0))));
     }
 
     private Request request(boolean confirmed, String profile) {
@@ -59,8 +64,101 @@ class MaintenanceServiceTests {
 
     @Test
     void updatesStatisticsWithRequestedSampling() {
-        assertTrue(service.run("statistics", request(true, "profile")).ok());
+        var result = service.run("statistics", request(true, "profile"));
+        assertTrue(result.ok());
+        assertEquals("verified", result.status());
         verify(repository).updateStatistics(eq(jdbc), eq("Example"), any(Table.class), eq(true));
+        var order = inOrder(repository);
+        order.verify(repository).requireVisibility(jdbc, "Example");
+        order.verify(repository).tables(jdbc, "Example");
+        order.verify(repository).statistics(jdbc, "Example", 12);
+        order.verify(repository).updateStatistics(eq(jdbc), eq("Example"), any(Table.class), eq(true));
+        order.verify(repository).statistics(jdbc, "Example", 12);
+    }
+
+    @Test
+    void unavailableDatesDoNotProduceFalseSuccessOrClaimThatTableIsEmpty() {
+        when(repository.statistics(jdbc, "Example", 12)).thenReturn(List.of(new StatisticRow(1, "stat", null)));
+        var result = service.run("statistics", request(true, "profile"));
+        assertFalse(result.ok());
+        assertEquals("unverified", result.status());
+        assertTrue(result.message().contains("sin fecha disponible"));
+        assertTrue(result.message().contains("permiso"));
+        verify(repository, times(1)).updateStatistics(eq(jdbc), eq("Example"), any(), eq(true));
+    }
+
+    @Test
+    void unchangedOrOlderDatesAreNotVerified() {
+        var original = new StatisticRow(1, "stat", LocalDateTime.of(2026, 10, 30, 14, 0));
+        for (int days : List.of(0, -1)) {
+            when(repository.statistics(jdbc, "Example", 12)).thenReturn(List.of(original),
+                    List.of(new StatisticRow(1, "stat", original.lastUpdated().plusDays(days))));
+            var result = service.run("statistics", request(true, "profile"));
+            assertFalse(result.ok());
+            assertEquals("unverified", result.status());
+            assertTrue(result.message().contains("no se observó una fecha posterior"));
+        }
+    }
+
+    @Test
+    void newDateAfterPreviouslyMissingDateCanBeVerified() {
+        when(repository.statistics(jdbc, "Example", 12)).thenReturn(List.of(new StatisticRow(1, "stat", null)),
+                List.of(new StatisticRow(1, "stat", LocalDateTime.of(2026, 11, 1, 14, 0))));
+        assertEquals("verified", service.run("statistics", request(true, "profile")).status());
+    }
+
+    @Test
+    void partialDateAdvanceDoesNotVerifyWholeTable() {
+        var date = LocalDateTime.of(2026, 10, 30, 14, 0);
+        when(repository.tables(jdbc, "Example")).thenReturn(List.of(new Table(12, "dbo", "broken", 2, date.toString(), 0L)));
+        when(repository.statistics(jdbc, "Example", 12)).thenReturn(
+                List.of(new StatisticRow(1, "first", date), new StatisticRow(2, "second", date)),
+                List.of(new StatisticRow(1, "first", date.plusDays(1)), new StatisticRow(2, "second", date)));
+        assertEquals("unverified", service.run("statistics", request(true, "profile")).status());
+    }
+
+    @Test
+    void changedOrInvisibleStatisticsCannotBeVerified() {
+        for (var after : List.of(List.<StatisticRow>of(), List.of(new StatisticRow(2, "replacement", LocalDateTime.now())))) {
+            when(repository.statistics(jdbc, "Example", 12)).thenReturn(
+                    List.of(new StatisticRow(1, "stat", LocalDateTime.of(2026, 10, 30, 14, 0))), after);
+            var result = service.run("statistics", request(true, "profile"));
+            assertEquals("unverified", result.status());
+            assertTrue(result.message().contains("lista de estadísticas"));
+        }
+    }
+
+    @Test
+    void postUpdateReadFailureIsUnverifiedAndDoesNotRetryWrite() {
+        when(repository.statistics(jdbc, "Example", 12)).thenReturn(List.of(new StatisticRow(1, "stat", null)))
+                .thenThrow(new InvalidDataAccessResourceUsageException("Read permission denied"));
+        var result = service.run("statistics", request(true, "profile"));
+        assertEquals("unverified", result.status());
+        assertTrue(result.message().contains("se ejecutó, pero no se pudo consultar"));
+        verify(repository, times(1)).updateStatistics(eq(jdbc), eq("Example"), any(), eq(true));
+    }
+
+    @Test
+    void preUpdateReadFailureDoesNotWrite() {
+        doThrow(new InvalidDataAccessResourceUsageException("Read permission denied"))
+                .when(repository).statistics(jdbc, "Example", 12);
+        assertEquals("failed", service.run("statistics", request(true, "profile")).status());
+        verify(repository, never()).updateStatistics(any(), anyString(), any(), anyBoolean());
+    }
+
+    @Test
+    void commandFailureIsNotMisclassifiedAsUnverified() {
+        doThrow(new InvalidDataAccessResourceUsageException("ALTER permission denied"))
+                .when(repository).updateStatistics(eq(jdbc), eq("Example"), any(), eq(true));
+        assertEquals("failed", service.run("statistics", request(true, "profile")).status());
+        verify(repository, times(1)).statistics(jdbc, "Example", 12);
+    }
+
+    @Test
+    void noExistingStatisticsCannotBeUpdated() {
+        when(repository.tables(jdbc, "Example")).thenReturn(List.of(new Table(12, "dbo", "broken", 0, null, null)));
+        assertThrows(IllegalArgumentException.class, () -> service.run("statistics", request(true, "profile")));
+        verify(repository, never()).updateStatistics(any(), anyString(), any(), anyBoolean());
     }
 
     @Test

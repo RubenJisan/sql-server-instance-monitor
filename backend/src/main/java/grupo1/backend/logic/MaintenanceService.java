@@ -8,6 +8,7 @@ import grupo1.backend.data.ActiveConnection;
 import grupo1.backend.data.AuditRepository;
 import grupo1.backend.data.MaintenanceRepository;
 import grupo1.backend.data.MaintenanceRepository.ModuleRow;
+import grupo1.backend.data.MaintenanceRepository.StatisticRow;
 import grupo1.backend.logic.dto.MaintenanceDTO;
 import grupo1.backend.logic.dto.MaintenanceDTO.Module;
 import grupo1.backend.logic.dto.MaintenanceDTO.Request;
@@ -88,8 +89,9 @@ public class MaintenanceService {
                                     && row.name().equals(request.name())).findFirst()
                             .orElseThrow(() -> new IllegalArgumentException("La tabla ya no existe o cambió. Actualice el análisis."));
                     if (table.statistics() == 0) throw new IllegalArgumentException("La tabla no tiene estadísticas existentes para actualizar.");
+                    List<StatisticRow> before = repository.statistics(jdbc, request.database(), table.objectId());
                     repository.updateStatistics(jdbc, request.database(), table, Boolean.TRUE.equals(request.fullScan()));
-                    return result(true, action, request, object, "Estadísticas actualizadas correctamente.");
+                    return verifyStatistics(jdbc, request, table.statistics(), before);
                 }
                 if (!"refresh".equals(action)) throw new IllegalArgumentException("Acción de mantenimiento no válida.");
                 ModuleRow module = repository.modules(jdbc, request.database()).stream()
@@ -112,6 +114,46 @@ public class MaintenanceService {
 
     private static void requireDatabase(List<String> databases, String database) {
         if (!databases.contains(database)) throw new IllegalArgumentException("Seleccione una base de usuario visible y en línea.");
+    }
+
+    private Result verifyStatistics(JdbcTemplate jdbc, Request request, int expectedCount, List<StatisticRow> before) {
+        String object = request.schema() + "." + request.name();
+        List<StatisticRow> after;
+        try {
+            after = repository.statistics(jdbc, request.database(), request.objectId());
+        } catch (DataAccessException exception) {
+            return unverified(request, "El comando de actualización se ejecutó, pero no se pudo consultar el resultado. "
+                    + reason(exception) + " Actualice el análisis y revise los permisos antes de reintentar.");
+        }
+        if (before.size() != expectedCount || after.size() != expectedCount
+                || after.stream().anyMatch(current -> before.stream().noneMatch(previous ->
+                        previous.id() == current.id() && previous.name().equals(current.name())))) {
+            return unverified(request, "El comando se ejecutó, pero cambió la lista de estadísticas o no es completamente visible. "
+                    + "Actualice el análisis antes de repetir la operación.");
+        }
+        long withoutDate = after.stream().filter(row -> row.lastUpdated() == null).count();
+        if (withoutDate > 0) {
+            return unverified(request, "El comando se ejecutó; " + withoutDate + " de " + expectedCount
+                    + " estadísticas siguen sin fecha disponible. SQL Server puede no generar una fecha cuando no hay filas "
+                    + "para esa estadística; también puede faltar permiso para consultar sus propiedades. "
+                    + "Esto no demuestra un fallo de la actualización. No se agregan datos ni se reintenta automáticamente.");
+        }
+        boolean allAdvanced = after.stream().allMatch(current -> before.stream().anyMatch(previous ->
+                previous.id() == current.id() && previous.name().equals(current.name())
+                        && (previous.lastUpdated() == null || current.lastUpdated().isAfter(previous.lastUpdated()))));
+        if (!allAdvanced) {
+            return unverified(request, "El comando se ejecutó, pero no se observó una fecha posterior en todas las estadísticas. "
+                    + "La actualización no se puede confirmar con esta lectura; no se considera un error SQL ni se reintenta. "
+                    + "Actualice el análisis y revise las propiedades y los permisos. El número de estadísticas no tiene que aumentar.");
+        }
+        return result(true, "statistics", request, object, "Actualización verificada: las fechas avanzaron en las "
+                + expectedCount + " estadísticas existentes. El número de estadísticas no aumenta por actualizarlas; "
+                + "un contador de cambios igual a 0 es normal tras la actualización.");
+    }
+
+    private static Result unverified(Request request, String message) {
+        return new Result(false, "statistics", request.database(), request.schema() + "." + request.name(),
+                message, Instant.now(), "unverified");
     }
 
     private static Result result(boolean ok, String action, Request request, String object, String message) {

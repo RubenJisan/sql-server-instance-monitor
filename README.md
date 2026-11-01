@@ -885,7 +885,7 @@ Estas pruebas verifican el código y la integración de las rutas, pero no susti
 | Respaldo: "Ejecutar FULL ahora" falla en una base | Falta `db_backupoperator` ahí (Script 3), la carpeta no existe o el servicio de SQL Server no puede escribir en ella, o la base es de solo lectura |
 | Auditoría: "No se pudo analizar la base X" | Falta el usuario o `VIEW DEFINITION` en esa base → Script 3 |
 | Mantenimiento: "Se requiere VIEW DEFINITION" o falta `ALTER` | Script 3 y Script 4 sobre la base seleccionada; no agregar `sysadmin` como solución general |
-| Mantenimiento: fecha y contador de estadísticas en `—` | Falta `SELECT` en la tabla (Script 4 con `@GrantSelectOnTables = 1`) o la tabla aún no tiene datos estadísticos |
+| Mantenimiento: sin fecha o contador no disponible | Puede faltar visibilidad de las propiedades o no existir datos estadísticos; consultar la sección 18. No significa necesariamente que la actualización haya fallado |
 | Mantenimiento: "no tiene estadísticas existentes" | Una tabla sin estadísticas no tiene nada que actualizar; la acción no crea estadísticas nuevas |
 | Mantenimiento: lista de objetos vacía | Distinguir "sin hallazgos" de "análisis incompleto": revisar los avisos |
 | El Script 3 imprime `ERROR <base>` | Mensaje de SQL Server en la misma línea; casos típicos: base en modo restringido o sin permiso de la sesión que ejecuta el script |
@@ -900,3 +900,19 @@ Referencias: [UPDATE STATISTICS](https://learn.microsoft.com/en-us/sql/t-sql/sta
 - No guardes contraseñas reales en este README ni en los scripts versionados: `<CONTRASEÑA_SEGURA>` es un marcador.
 - `dbwatch_monitor` no es `sysadmin` ni `db_owner`. Sus permisos de escritura se limitan a: `db_backupoperator` (respaldos completos), `ALTER` sobre los objetos que autorices (Mantenimiento) y, opcionalmente, `ALTER ANY CONNECTION` (terminar sesiones).
 - El backend escucha solo en `127.0.0.1` y no tiene autenticación propia: cualquiera con acceso a esa máquina puede usar la aplicación con los permisos del login configurado.
+
+## 18. Estadísticas sin fecha y verificación de la actualización
+
+Una tabla puede tener un objeto de estadísticas y no disponer de fecha ni contador visible. SQL Server puede no generar datos estadísticos si no hay filas para esa estadística, y los permisos también limitan la consulta de sus propiedades. El módulo muestra «Sin fecha disponible» y cuántas estadísticas tienen fecha; no da por hecho que la tabla esté vacía ni inventa un valor. La fecha mostrada es la más antigua entre las disponibles: si falta alguna, esa fecha no representa todas las estadísticas.
+
+Actualizar una estadística no aumenta la cantidad de objetos de estadísticas. Un contador de cambios igual a 0 puede ser normal tras actualizar. El módulo no agrega registros ficticios, no concede permisos automáticamente y no hace reintentos de escritura.
+
+Después de confirmar una actualización se consultan las fechas individuales antes y después del comando, sin compararlas con el reloj del backend. La API distingue:
+
+- `status: verified`, `ok: true`: la identidad y cantidad de estadísticas se conservan y todas tienen una fecha posterior; una fecha antes ausente y ahora disponible también cuenta como avance.
+- `status: unverified`, `ok: false`: el comando terminó sin error SQL, pero faltan fechas, alguna no avanzó, cambió la lista o falló la consulta posterior. La pantalla muestra un aviso amarillo de resultado no verificable. No es un éxito confirmado ni un fallo SQL demostrado. Una repetición muy rápida también puede no producir una diferencia de fecha observable.
+- `status: failed`, `ok: false`: ocurrió un error de ejecución o de lectura previa. Un timeout no prueba que se haya revertido una operación ya iniciada.
+
+Si no se puede verificar, revisar el aviso y actualizar el análisis antes de repetir. No cambiar datos para obligar a que aparezca una fecha. Si el problema es de permisos, usar el Script 4 con el alcance autorizado; si no hay filas para generar estadísticas, una fecha ausente puede ser normal. Los clientes de la API deben comprobar `status` además de `ok`.
+
+Para instalar esta corrección en otra máquina, actualizar backend y frontend conjuntamente y reiniciarlos. Un backend antiguo no proporciona `datedStatistics`; la pantalla pedirá actualizar backend y análisis si falta ese detalle. Se incluyen pruebas para fechas nulas, iguales y anteriores, actualización parcial, cambios de lista y fallos antes y después del comando. No se necesita un respaldo nuevo ni permisos adicionales respecto de los documentados para el módulo.

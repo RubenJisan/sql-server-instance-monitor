@@ -12,7 +12,12 @@ public record MaintenanceDTO(String profileId, String profileName, List<String> 
                              String database, List<Table> tables, List<Module> objects,
                              List<String> warnings, Instant checkedAt) {
     public record Table(int objectId, String schema, String name, int statistics,
-                        String lastUpdated, Long modifications) {
+                        String lastUpdated, Long modifications, int datedStatistics) {
+        public Table(int objectId, String schema, String name, int statistics,
+                     String lastUpdated, Long modifications) {
+            this(objectId, schema, name, statistics, lastUpdated, modifications,
+                    lastUpdated == null ? 0 : statistics);
+        }
     }
 
     public record Module(int objectId, String schema, String name, String type,
@@ -26,6 +31,10 @@ public record MaintenanceDTO(String profileId, String profileName, List<String> 
     }
 
     public record Result(boolean ok, String action, String database, String object,
-                         String message, Instant finishedAt) {
+                         String message, Instant finishedAt, String status) {
+        public Result(boolean ok, String action, String database, String object,
+                      String message, Instant finishedAt) {
+            this(ok, action, database, object, message, finishedAt, ok ? "verified" : "failed");
+        }
     }
 }
