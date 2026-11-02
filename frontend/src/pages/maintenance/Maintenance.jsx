@@ -11,14 +11,27 @@ async function request(path, body, signal) {
         body: body ? JSON.stringify(body) : undefined,
         signal
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || `Error ${response.status}`);
+    const text = await response.text();
+    let data;
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch {
+        data = null;
+    }
+    if (!response.ok) {
+        const error = new Error(data?.message || `Error ${response.status} del servidor.`);
+        error.status = response.status;
+        throw error;
+    }
+    if (!data) throw new Error('El servidor devolvió una respuesta vacía o inválida.');
     return data;
 }
 
 function Maintenance() {
     const [overview, setOverview] = useState(null);
     const [database, setDatabase] = useState('');
+    const [databases, setDatabases] = useState([]);
+    const [profileName, setProfileName] = useState('');
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [running, setRunning] = useState(false);
@@ -30,6 +43,26 @@ function Maintenance() {
     const abort = useRef(null);
     const operationLock = useRef(false);
 
+    const acceptOverview = useCallback(data => {
+        if (!['databases', 'tables', 'objects', 'warnings'].every(key => Array.isArray(data[key]))) {
+            throw new Error('El análisis recibido no tiene el formato esperado. Actualice el backend.');
+        }
+        setOverview(data);
+        setDatabases(data.databases);
+        setDatabase(data.database || '');
+        setProfileName(data.profileName || '');
+    }, []);
+
+    const reportLoadError = useCallback(exception => {
+        if (exception.name === 'AbortError') return;
+        if (exception.status === 409) {
+            setDatabases([]);
+            setDatabase('');
+            setProfileName('');
+        }
+        setError(`No se pudo cargar el análisis. ${exception.message}. Puede elegir otra base o reintentar; revise la conexión y los permisos.`);
+    }, []);
+
     const load = useCallback(async (selected = '') => {
         abort.current?.abort();
         const controller = new AbortController();
@@ -40,39 +73,37 @@ function Maintenance() {
         try {
             const data = await request(`/overview${selected ? `?database=${encodeURIComponent(selected)}` : ''}`,
                 null, controller.signal);
-            setOverview(data);
-            setDatabase(data.database || '');
+            if (!controller.signal.aborted && abort.current === controller) acceptOverview(data);
         } catch (exception) {
-            if (exception.name !== 'AbortError') {
-                setError(`No se pudo cargar el análisis. ${exception.message}. Revise la conexión y los permisos.`);
-            }
+            if (!controller.signal.aborted && abort.current === controller) reportLoadError(exception);
         } finally {
-            if (!controller.signal.aborted) setLoading(false);
+            if (!controller.signal.aborted && abort.current === controller) setLoading(false);
         }
-    }, []);
+    }, [acceptOverview, reportLoadError]);
 
     useEffect(() => {
         const controller = new AbortController();
         abort.current = controller;
         request('/overview', null, controller.signal).then(data => {
-            setOverview(data);
-            setDatabase(data.database || '');
+            if (!controller.signal.aborted && abort.current === controller) acceptOverview(data);
         }).catch(exception => {
-            if (exception.name !== 'AbortError') setError(`No se pudo cargar el análisis. ${exception.message}. Revise la conexión y los permisos.`);
+            if (!controller.signal.aborted && abort.current === controller) reportLoadError(exception);
         }).finally(() => {
-            if (!controller.signal.aborted) setLoading(false);
+            if (!controller.signal.aborted && abort.current === controller) setLoading(false);
         });
         return () => abort.current?.abort();
-    }, []);
+    }, [acceptOverview, reportLoadError]);
 
     function confirm(action, target) {
+        if (loading || operationLock.current || !overview || overview.database !== database || error) return;
         setPending({ action, ...target, profileId: overview.profileId, database: overview.database });
         setFullScan(false);
         dialog.current.showModal();
     }
 
     async function execute() {
-        if (!pending || operationLock.current) return;
+        if (!pending || operationLock.current || loading || pending.database !== overview?.database
+            || pending.profileId !== overview?.profileId) return;
         operationLock.current = true;
         setRunning(true);
         setResult(null);
@@ -110,14 +141,14 @@ function Maintenance() {
                 <div>
                     <h1>Mantenimiento preventivo</h1>
                     <p className="sub">Estadísticas y dependencias de SQL Server</p>
-                    <p className="sub">Instancia: {overview?.profileName || 'Sin análisis disponible'} · <Link to="/instance">Configurar conexión</Link></p>
+                    <p className="sub">Instancia: {profileName || 'Sin análisis disponible'} · <Link to="/instance">Configurar conexión</Link></p>
                 </div>
                 <div className="controls">
                     <label>Base de datos
-                        <select value={database} disabled={disabled || !overview?.databases.length}
+                        <select value={database} disabled={running || !databases.length}
                                 onChange={event => { setDatabase(event.target.value); setResult(null); void load(event.target.value); }}>
-                            {!overview && <option value="">Seleccione una conexión</option>}
-                            {overview?.databases.map(name => <option key={name}>{name}</option>)}
+                            {!databases.length && <option value="">Seleccione una conexión</option>}
+                            {databases.map(name => <option key={name}>{name}</option>)}
                         </select>
                     </label>
                     <button className="btn btnGhost" disabled={disabled} onClick={() => { setResult(null); void load(database); }}>
@@ -153,7 +184,9 @@ function Maintenance() {
                     <div className="tableWrap"><table>
                         <thead><tr><th>Tabla</th><th>Estadísticas</th><th>Fecha estadística más antigua</th><th>Cambios</th><th>Disponibilidad de fechas</th><th>Acción</th></tr></thead>
                         <tbody>
-                        {!tables.length && <tr><td colSpan={6}>No hay tablas que coincidan. Las tablas optimizadas en memoria se excluyen.</td></tr>}
+                        {!tables.length && <tr><td colSpan={6}>{overview.warnings.length
+                            ? 'No hay tablas disponibles para mostrar; revise los avisos del análisis y los filtros.'
+                            : 'No hay tablas que coincidan. Las tablas optimizadas en memoria se excluyen.'}</td></tr>}
                         {tables.map(table => <tr key={table.objectId}>
                             <td className="mono">{table.schema}.{table.name}</td><td>{table.statistics}</td>
                             <td>{table.lastUpdated ? new Date(table.lastUpdated).toLocaleString('es-CR') : 'Sin fecha disponible'}</td>

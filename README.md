@@ -916,3 +916,13 @@ Después de confirmar una actualización se consultan las fechas individuales an
 Si no se puede verificar, revisar el aviso y actualizar el análisis antes de repetir. No cambiar datos para obligar a que aparezca una fecha. Si el problema es de permisos, usar el Script 4 con el alcance autorizado; si no hay filas para generar estadísticas, una fecha ausente puede ser normal. Los clientes de la API deben comprobar `status` además de `ok`.
 
 Para instalar esta corrección en otra máquina, actualizar backend y frontend conjuntamente y reiniciarlos. Un backend antiguo no proporciona `datedStatistics`; la pantalla pedirá actualizar backend y análisis si falta ese detalle. Se incluyen pruebas para fechas nulas, iguales y anteriores, actualización parcial, cambios de lista y fallos antes y después del comando. No se necesita un respaldo nuevo ni permisos adicionales respecto de los documentados para el módulo.
+
+## 19. Cambiar de base en Mantenimiento
+
+El selector conserva el catálogo de bases mientras carga o si una consulta falla. Si una base no permite leer sus definiciones o queda inaccesible, se muestra un aviso con el nombre de la base y se puede elegir otra sin recargar toda la aplicación. Los errores de estadísticas, referencias y módulos se gestionan por sección, siguiendo el patrón de Almacenamiento; los datos no consultados no se presentan como un análisis completo sin problemas.
+
+Al cambiar de base se descartan los datos anteriores y se cancelan las consultas de lectura pendientes. Las respuestas antiguas no reemplazan la selección más reciente. Una respuesta vacía, inválida, un error HTTP o una caída de red muestran un mensaje sin inutilizar el selector. Si no hay conexión activa, se limpia el catálogo y se solicita configurar una conexión.
+
+Las acciones de estadísticas y corrección conservan sus confirmaciones y validaciones de perfil, base y objeto. Durante una escritura se bloquea el cambio de base; al finalizar se vuelve a analizar la base de esa operación. Una base que no pudo analizarse no muestra acciones sobre datos de la anterior. No se concede ningún permiso automáticamente ni se cambia silenciosamente a otra base para ejecutar una acción.
+
+Para instalar, actualizar backend y frontend conjuntamente y reiniciarlos. Se mantienen los requisitos y permisos ya documentados; una base nueva debe tener su usuario y los permisos autorizados, aunque ahora el módulo permite salir de ella cuando estos faltan.

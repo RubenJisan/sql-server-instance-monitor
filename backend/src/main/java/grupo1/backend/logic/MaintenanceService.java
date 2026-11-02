@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import grupo1.backend.data.ActiveConnection;
 import grupo1.backend.data.AuditRepository;
 import grupo1.backend.data.MaintenanceRepository;
@@ -37,12 +38,19 @@ public class MaintenanceService {
             }
             String selected = database == null || database.isBlank() ? databases.getFirst() : database;
             requireDatabase(databases, selected);
-            repository.requireVisibility(jdbc, selected);
             List<String> warnings = new ArrayList<>();
-            var tables = repository.tables(jdbc, selected);
-            var findings = auditRepository.findInvalidObjects(selected);
+            try {
+                repository.requireVisibility(jdbc, selected);
+            } catch (IllegalArgumentException | DataAccessException exception) {
+                warnings.add("No se pudo analizar la base " + selected + ": "
+                        + NestedExceptionUtils.getMostSpecificCause(exception).getMessage()
+                        + " Puede seleccionar otra base o revisar sus permisos y disponibilidad.");
+                return new MaintenanceDTO(profile.id(), profile.name(), databases, selected, List.of(), List.of(), warnings, Instant.now());
+            }
+            var tables = attempt("las estadísticas de " + selected, () -> repository.tables(jdbc, selected), warnings);
+            var findings = attempt("las referencias de " + selected, () -> auditRepository.findInvalidObjects(selected), warnings);
             List<Module> objects = new ArrayList<>();
-            for (ModuleRow module : repository.modules(jdbc, selected)) {
+            for (ModuleRow module : attempt("los módulos de " + selected, () -> repository.modules(jdbc, selected), warnings)) {
                 String problem = findings.stream()
                         .filter(row -> row.schemaName().equals(module.schema()) && row.objectName().equals(module.name()))
                         .map(row -> "Dependencia sin resolver: " + row.referencedName()).distinct()
@@ -114,6 +122,15 @@ public class MaintenanceService {
 
     private static void requireDatabase(List<String> databases, String database) {
         if (!databases.contains(database)) throw new IllegalArgumentException("Seleccione una base de usuario visible y en línea.");
+    }
+
+    private static <T> List<T> attempt(String section, Supplier<List<T>> query, List<String> warnings) {
+        try {
+            return query.get();
+        } catch (DataAccessException exception) {
+            warnings.add("No se pudo obtener " + section + ": " + reason(exception));
+            return List.of();
+        }
     }
 
     private Result verifyStatistics(JdbcTemplate jdbc, Request request, int expectedCount, List<StatisticRow> before) {

@@ -218,6 +218,78 @@ class MaintenanceServiceTests {
     }
 
     @Test
+    void databaseWithoutVisibilityKeepsCatalogAndReturnsWarning() {
+        when(audit.findUserDatabases()).thenReturn(List.of("Example", "Restricted"));
+        doThrow(new IllegalArgumentException("Se requiere VIEW DEFINITION"))
+                .when(repository).requireVisibility(jdbc, "Restricted");
+        var overview = service.getOverview("Restricted");
+        assertEquals("Restricted", overview.database());
+        assertEquals(List.of("Example", "Restricted"), overview.databases());
+        assertTrue(overview.tables().isEmpty());
+        assertTrue(overview.objects().isEmpty());
+        assertTrue(overview.warnings().getFirst().contains("Restricted"));
+        verify(repository, never()).tables(jdbc, "Restricted");
+        assertEquals("Example", service.getOverview("Example").database());
+    }
+
+    @Test
+    void databaseAccessFailureIsRecoverableButDoesNotAuthorizeWrites() {
+        doThrow(new InvalidDataAccessResourceUsageException("Database unavailable"))
+                .when(repository).requireVisibility(jdbc, "Example");
+        var overview = service.getOverview("Example");
+        assertEquals(List.of("Example"), overview.databases());
+        assertEquals(1, overview.warnings().size());
+        assertThrows(InvalidDataAccessResourceUsageException.class,
+                () -> service.run("statistics", request(true, "profile")));
+        verify(repository, never()).updateStatistics(any(), anyString(), any(), anyBoolean());
+    }
+
+    @Test
+    void statisticsReadFailureDoesNotDiscardObjectScanOrCatalog() {
+        doThrow(new InvalidDataAccessResourceUsageException("Statistics denied"))
+                .when(repository).tables(jdbc, "Example");
+        when(repository.unresolved(jdbc, "Example", "dbo", "broken")).thenReturn(List.of("dbo.missing"));
+        var overview = service.getOverview("Example");
+        assertTrue(overview.tables().isEmpty());
+        assertEquals(1, overview.objects().size());
+        assertEquals(List.of("Example"), overview.databases());
+        assertEquals(1, overview.warnings().size());
+    }
+
+    @Test
+    void moduleReadFailureDoesNotDiscardStatistics() {
+        doThrow(new InvalidDataAccessResourceUsageException("Modules denied"))
+                .when(repository).modules(jdbc, "Example");
+        var overview = service.getOverview("Example");
+        assertEquals(1, overview.tables().size());
+        assertTrue(overview.objects().isEmpty());
+        assertEquals(1, overview.warnings().size());
+    }
+
+    @Test
+    void referenceReadFailureStillValidatesVisibleModules() {
+        doThrow(new InvalidDataAccessResourceUsageException("References denied"))
+                .when(audit).findInvalidObjects("Example");
+        when(repository.unresolved(jdbc, "Example", "dbo", "broken")).thenReturn(List.of("dbo.missing"));
+        var overview = service.getOverview("Example");
+        assertEquals(1, overview.tables().size());
+        assertEquals(1, overview.objects().size());
+        assertEquals(1, overview.warnings().size());
+    }
+
+    @Test
+    void overviewSwitchesToRequestedDatabaseWithoutKeepingPreviousObjects() {
+        when(audit.findUserDatabases()).thenReturn(List.of("Example", "Empty"));
+        assertEquals(1, service.getOverview("Example").tables().size());
+        var empty = service.getOverview("Empty");
+        assertEquals("Empty", empty.database());
+        assertTrue(empty.tables().isEmpty());
+        assertTrue(empty.objects().isEmpty());
+        assertEquals(1, service.getOverview("Example").tables().size());
+        assertThrows(IllegalArgumentException.class, () -> service.getOverview("Unknown"));
+    }
+
+    @Test
     void handlesNoActiveConnectionAndEmptyDatabaseList() {
         when(audit.findUserDatabases()).thenReturn(List.of());
         assertNull(service.getOverview(null).database());
