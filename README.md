@@ -357,15 +357,19 @@ References: [UPDATE STATISTICS](https://learn.microsoft.com/en-us/sql/t-sql/stat
 ## Authors
 
 **Rubén Jiménez** — Software Solutions Developer
-[GitHub](https://github.com/RubenJisan) · [LinkedIn](https://www.linkedin.com/in/rubenjisan>)
+[GitHub](https://github.com/RubenJisan) · [LinkedIn](https://www.linkedin.com/in/rubenjisan)
 
 **Paulo Zamora**
+[GitHub](https://github.com/Pauloozr)
 
 **Pablo Campos**
+[GitHub](https://github.com/PabloCV29)
 
 **Naara Menjivar**
+[GitHub](https://github.com/naaramenjivarramirez)
 
 **Ignacio Bolaños**
+[GitHub](https://github.com/NachoU05)
 
 ## License
 
