@@ -1,1 +1,0 @@
-Esta carpeta es por si usamos alguna API externa, su uso, clases, utilidades, etc, van acá

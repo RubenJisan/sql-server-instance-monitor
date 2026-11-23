@@ -1,1 +1,0 @@
-Aqui van las carpetas de cada una de las paginas, tal que por cada pagina hay N cantidad de elementos react, y por cada elemento un archivo CSS. Los CSS y el estilo visual debe ser estandar con los mockups enviados, no puede haber discrepancias con los mockups

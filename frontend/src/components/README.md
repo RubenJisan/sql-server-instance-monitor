@@ -1,1 +1,0 @@
-aqui van componentes que se repitan, como el NavBar y el Footer
